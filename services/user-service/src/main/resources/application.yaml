@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: user-service
+  mongodb:
+    username: ${MONGO_USER}
+    password: ${MONGO_PASS}
+    host: ${MONGO_HOST:localhost}
+    port: ${MONGO_PORT:27017}
+    database: ${MONGO_DB:timetracker}
+
+oauth2:
+  issuer: ${AUTH_SERVER_ISSUER:http://localhost:8080}
+  client:
+    id: ${OAUTH2_CLIENT_ID:user-service-client}
+    secret: ${OAUTH2_CLIENT_SECRET:user-service-secret}
+    redirect-uri: ${OAUTH2_REDIRECT_URI:http://127.0.0.1:8080/login/oauth2/code/user-service-client}
+    post-logout-redirect-uri: ${OAUTH2_POST_LOGOUT_REDIRECT_URI:http://127.0.0.1:8080/}
+  token:
+    access-token-ttl: ${ACCESS_TOKEN_TTL:PT1H}
