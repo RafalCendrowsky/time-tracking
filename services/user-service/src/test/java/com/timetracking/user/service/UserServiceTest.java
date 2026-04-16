@@ -1,10 +1,12 @@
 package com.timetracking.user.service;
 
-import com.timetracking.user.domain.UserAccount;
-import com.timetracking.user.repository.UserAccountRepository;
+import com.timetracking.user.exception.DuplicateEmailException;
+import com.timetracking.user.model.domain.UserAccount;
+import com.timetracking.user.model.repository.UserAccountRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -21,7 +23,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class AuthServiceTest {
+class UserServiceTest {
 
     @Mock
     private UserAccountRepository userAccountRepository;
@@ -29,9 +31,11 @@ class AuthServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
+    @InjectMocks
+    private UserService userService;
+
     @Test
     void registerNormalizesEmailAndHashesPassword() {
-        AuthService authService = new AuthService(userAccountRepository, passwordEncoder);
         when(userAccountRepository.existsByEmail("alice@example.com")).thenReturn(false);
         when(passwordEncoder.encode("password123")).thenReturn("hashed-password");
         when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> {
@@ -40,7 +44,7 @@ class AuthServiceTest {
             return account;
         });
 
-        UserAccount saved = authService.register(" Alice@Example.com ", "password123");
+        UserAccount saved = userService.register(" Alice@Example.com ", "password123");
 
         var captor = ArgumentCaptor.forClass(UserAccount.class);
         verify(userAccountRepository).save(captor.capture());
@@ -53,32 +57,43 @@ class AuthServiceTest {
 
     @Test
     void registerRejectsDuplicateEmail() {
-        AuthService authService = new AuthService(userAccountRepository, passwordEncoder);
         when(userAccountRepository.existsByEmail("alice@example.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> authService.register("alice@example.com", "password123"))
+        assertThatThrownBy(() -> userService.register("alice@example.com", "password123"))
                 .isInstanceOf(DuplicateEmailException.class);
     }
 
     @Test
     void loadUserByUsernameMapsRolesToAuthorities() {
-        AuthService authService = new AuthService(userAccountRepository, passwordEncoder);
         UserAccount account = new UserAccount(
                 "user-1",
                 "alice@example.com",
                 "hashed",
+                "org-1",
                 Set.of("USER", "ADMIN"),
                 Instant.now(),
                 Instant.now()
         );
         when(userAccountRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(account));
 
-        UserDetails userDetails = authService.loadUserByUsername("Alice@Example.com");
+        UserDetails userDetails = userService.loadUserByUsername("Alice@Example.com");
 
-        assertThat(userDetails.getUsername()).isEqualTo("alice@example.com");
+        assertThat(userDetails.getUsername()).isEqualTo("user-1");
         assertThat(userDetails.getAuthorities())
                 .extracting("authority")
                 .containsExactlyInAnyOrder("ROLE_USER", "ROLE_ADMIN");
+    }
+
+    @Test
+    void resolveOrProvisionExternalAccountCreatesNewOrganizationBackedAccount() {
+        when(userAccountRepository.findByEmail("alice@example.com")).thenReturn(Optional.empty());
+        when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UserAccount account = userService.resolveOrProvisionExternalAccount("alice@example.com", "org-1");
+
+        assertThat(account.getEmail()).isEqualTo("alice@example.com");
+        assertThat(account.getPasswordHash()).isNull();
+        assertThat(account.getOrganizationId()).isEqualTo("org-1");
     }
 }
 

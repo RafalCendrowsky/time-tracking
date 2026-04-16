@@ -1,24 +1,24 @@
 package com.timetracking.user.web;
 
-import com.timetracking.user.domain.UserAccount;
-import com.timetracking.user.service.AuthService;
+import com.timetracking.user.dto.LoginOption;
+import com.timetracking.user.model.domain.UserAccount;
+import com.timetracking.user.service.LoginOptionService;
+import com.timetracking.user.service.UserService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.net.URI;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
-
-    private final AuthService authService;
-
-    public AuthController(AuthService authService) {
-        this.authService = authService;
-    }
+    private final UserService authService;
+    private final LoginOptionService loginOptionService;
 
     @PostMapping("/register")
     public ResponseEntity<RegisterUserResponse> register(@Valid @RequestBody RegisterUserRequest request) {
@@ -26,5 +26,23 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(RegisterUserResponse.from(userAccount));
     }
-}
 
+    @GetMapping("/login-options")
+    public ResponseEntity<List<LoginOption>> loginOptions(@RequestParam String email) {
+        return ResponseEntity.ok(loginOptionService.findLoginOptions(email));
+    }
+
+    @GetMapping("/login/internal")
+    public ResponseEntity<Void> internalLogin() {
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create("/login"))
+                .build();
+    }
+
+    @GetMapping("/login/external/{organizationId}")
+    public ResponseEntity<Void> externalLogin(@PathVariable String organizationId) {
+        return ResponseEntity.status(HttpStatus.FOUND)
+                .location(URI.create("/oauth2/authorization/" + organizationId))
+                .build();
+    }
+}

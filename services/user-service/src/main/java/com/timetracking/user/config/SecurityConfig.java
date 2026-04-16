@@ -5,6 +5,11 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import com.timetracking.user.config.properties.CorsProperties;
+import com.timetracking.user.config.properties.OAuthProperties;
+import com.timetracking.user.service.CustomOidcUserService;
+import com.timetracking.user.service.VaultService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -13,7 +18,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.config.annotation.web.configurers.oauth2.server.authorization.OAuth2AuthorizationServerConfigurer;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
@@ -30,32 +35,32 @@ import org.springframework.security.oauth2.server.authorization.settings.TokenSe
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
+import java.text.ParseException;
 import java.util.UUID;
 
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+    static final String VAULT_KEY_RSA = "jwt-rsa-key";
+    static final String VAULT_KEY_CLIENT_SECRET = "oauth2-client-secret";
 
-    @Bean
-    PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    private final CustomOidcUserService oidcUserService;
+    private final CorsProperties corsProperties;
 
     @Bean
     @Order(1)
     SecurityFilterChain authServerFilterChain(HttpSecurity http) {
+        var authServerConfigurer = new OAuth2AuthorizationServerConfigurer();
         http
-                .oauth2AuthorizationServer(authServer -> {
-                    http.securityMatcher(authServer.getEndpointsMatcher());
-                    authServer.oidc(Customizer.withDefaults());
-                })
-                .authorizeHttpRequests(auth ->
-                                               auth.anyRequest().authenticated())
+                .securityMatcher(authServerConfigurer.getEndpointsMatcher())
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .with(authServerConfigurer, cfg -> cfg.oidc(Customizer.withDefaults()))
+                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
@@ -68,30 +73,42 @@ public class SecurityConfig {
     @Order(2)
     SecurityFilterChain defaultFilterChain(HttpSecurity http) {
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/auth/**", "/error").permitAll()
                         .anyRequest().authenticated())
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/auth/**"))
-                .formLogin(Customizer.withDefaults());
+                .formLogin(Customizer.withDefaults())
+                .oauth2Login(oauth2 -> oauth2
+                        .userInfoEndpoint(userInfo -> userInfo
+                                .oidcUserService(oidcUserService)
+                        )
+                );
         return http.build();
     }
 
     @Bean
-    RegisteredClientRepository registeredClientRepository(PasswordEncoder passwordEncoder, OAuthProperties properties) {
-        RegisteredClient registeredClient = RegisteredClient.withId(UUID.randomUUID().toString())
+    RegisteredClientRepository registeredClientRepository(
+            PasswordEncoder passwordEncoder,
+            OAuthProperties properties,
+            VaultService vault
+    ) {
+        var clientSecret = vault.get(VAULT_KEY_CLIENT_SECRET);
+
+        var registeredClient = RegisteredClient.withId(UUID.randomUUID().toString())
                 .clientId(properties.client().id())
-                .clientSecret(passwordEncoder.encode(properties.client().secret()))
+                .clientSecret(passwordEncoder.encode(clientSecret))
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_POST)
+                .clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
                 .redirectUri(properties.client().redirectUri())
                 .scope(OidcScopes.OPENID)
                 .scope(OidcScopes.PROFILE)
                 .scope(OidcScopes.EMAIL)
                 .clientSettings(ClientSettings.builder()
                                         .requireAuthorizationConsent(false)
+                                        .requireProofKey(true)
                                         .build())
                 .tokenSettings(TokenSettings.builder()
                                        .accessTokenTimeToLive(properties.token().accessTokenTtl())
@@ -103,6 +120,21 @@ public class SecurityConfig {
     }
 
     @Bean
+    CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(corsProperties.allowedOrigins());
+        config.setAllowedMethods(corsProperties.allowedMethods());
+        config.setAllowedHeaders(corsProperties.allowedHeaders());
+        config.setExposedHeaders(corsProperties.exposedHeaders());
+        config.setAllowCredentials(corsProperties.allowCredentials());
+        config.setMaxAge(corsProperties.maxAgeSeconds());
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    @Bean
     AuthorizationServerSettings authorizationServerSettings(OAuthProperties properties) {
         return AuthorizationServerSettings.builder()
                 .issuer(properties.issuer())
@@ -110,18 +142,12 @@ public class SecurityConfig {
     }
 
     @Bean
-    RSAKey rsaKey() {
+    RSAKey rsaKey(VaultService vault) {
+        var jwkJson = vault.get(VAULT_KEY_RSA);
         try {
-            KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
-            generator.initialize(2048);
-            KeyPair keyPair = generator.generateKeyPair();
-
-            return new RSAKey.Builder((RSAPublicKey) keyPair.getPublic())
-                    .privateKey((RSAPrivateKey) keyPair.getPrivate())
-                    .keyID(UUID.randomUUID().toString())
-                    .build();
-        } catch (Exception ex) {
-            throw new IllegalStateException("Unable to generate RSA key pair", ex);
+            return RSAKey.parse(jwkJson);
+        } catch (ParseException ex) {
+            throw new IllegalStateException("Failed to parse RSA key from vault", ex);
         }
     }
 

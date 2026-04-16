@@ -1,6 +1,6 @@
-package com.timetracking.user.repository;
+package com.timetracking.user.model.repository;
 
-import com.timetracking.user.domain.UserAccount;
+import com.timetracking.user.model.domain.UserAccount;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.Optional;

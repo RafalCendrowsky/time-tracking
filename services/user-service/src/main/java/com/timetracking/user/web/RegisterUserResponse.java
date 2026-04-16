@@ -1,6 +1,6 @@
 package com.timetracking.user.web;
 
-import com.timetracking.user.domain.UserAccount;
+import com.timetracking.user.model.domain.UserAccount;
 
 import java.time.Instant;
 import java.util.Set;

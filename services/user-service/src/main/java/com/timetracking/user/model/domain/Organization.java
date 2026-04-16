@@ -1,4 +1,4 @@
-package com.timetracking.user.domain;
+package com.timetracking.user.model.domain;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -8,7 +8,6 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -16,21 +15,25 @@ import java.util.Set;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "users")
-public class UserAccount {
-
+@Document(collection = "organizations")
+public class Organization {
     @Id
     private String id;
 
     @Indexed(unique = true)
-    private String email;
+    private String name;
 
-    private String passwordHash;
+    private Set<String> domains = new LinkedHashSet<>();
+    private IdpConfig externalIdp;
 
-    private Set<String> roles = new LinkedHashSet<>();
-
-    private Instant createdAt;
-
-    private Instant updatedAt;
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IdpConfig {
+        private String clientId;
+        private String clientSecretRef;
+        private String discoveryUri;
+    }
 }
 
