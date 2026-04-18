@@ -35,6 +35,10 @@ public class ClientRegistrationService implements ClientRegistrationRepository {
         );
     }
 
+    public void evict(String registrationId) {
+        clientRegistrationCache.remove(registrationId);
+    }
+
     private ClientRegistration createClientRegistration(Organization organization) {
         var idp = organization.getExternalIdp();
         var clientSecret = vaultService.get(idp.getClientSecretRef());

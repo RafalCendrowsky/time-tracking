@@ -186,6 +186,16 @@
             <label for="reg-email">Email address</label>
             <input id="reg-email" type="email" autocomplete="email" readonly/>
         </div>
+        <div style="display:flex;gap:.75rem;">
+            <div class="field" style="flex:1">
+                <label for="reg-first-name">First name</label>
+                <input id="reg-first-name" type="text" placeholder="Jane" autocomplete="given-name"/>
+            </div>
+            <div class="field" style="flex:1">
+                <label for="reg-last-name">Last name</label>
+                <input id="reg-last-name" type="text" placeholder="Doe" autocomplete="family-name"/>
+            </div>
+        </div>
         <div class="field">
             <label for="reg-password">Password</label>
             <input id="reg-password" type="password" placeholder="At least 8 characters" autocomplete="new-password"/>
@@ -277,7 +287,7 @@
         $('step-options').hidden = true;
         $('step-register').hidden = false;
         $('reg-email').value = currentEmail;
-        $('reg-password').focus();
+        $('reg-first-name').focus();
     }
 
     function showOptionsStep(options) {
@@ -314,6 +324,10 @@
         $('step-register').hidden = true;
         $('step-email').hidden = false;
         $('options-list').innerHTML = '';
+        $('reg-first-name').value = '';
+        $('reg-last-name').value = '';
+        $('reg-password').value = '';
+        $('reg-password-confirm').value = '';
         $('email').focus();
         hideError();
     }
@@ -343,7 +357,12 @@
                     'X-CSRF-TOKEN': csrfToken,
                     'X-XSRF-TOKEN': csrfToken
                 },
-                body: JSON.stringify({email: currentEmail, password})
+                body: JSON.stringify({
+                    email: currentEmail,
+                    password,
+                    firstName: $('reg-first-name').value.trim() || null,
+                    lastName: $('reg-last-name').value.trim() || null
+                })
             });
             if (res.status === 201) {
                 window.location.href = '/login?registered';

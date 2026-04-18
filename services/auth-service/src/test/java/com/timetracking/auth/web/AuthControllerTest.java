@@ -1,5 +1,6 @@
 package com.timetracking.auth.web;
 
+import com.timetracking.auth.constant.UserRole;
 import com.timetracking.auth.dto.LoginOption;
 import com.timetracking.auth.model.domain.UserAccount;
 import com.timetracking.auth.service.LoginOptionService;
@@ -38,16 +39,18 @@ class AuthControllerTest {
 
     @Test
     void registerReturnsCreatedUser() throws Exception {
-        UserAccount userAccount = new UserAccount(
+        var userAccount = new UserAccount(
                 "user-1",
                 "alice@example.com",
                 "hashed",
                 null,
-                Set.of("USER"),
+                Set.of(UserRole.USER),
+                "Alice",
+                "Something",
                 Instant.parse("2026-04-16T12:00:00Z"),
                 Instant.parse("2026-04-16T12:00:00Z")
         );
-        when(authService.register(anyString(), anyString())).thenReturn(userAccount);
+        when(authService.register(anyString(), anyString(), anyString(), anyString())).thenReturn(userAccount);
 
         mockMvc.perform(post("/api/auth/register")
                                 .contentType(MediaType.APPLICATION_JSON)

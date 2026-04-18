@@ -19,7 +19,9 @@ public class CustomOidcUserService implements OAuth2UserService<OidcUserRequest,
 
         var email = oidcUser.getEmail();
         var organizationId = userRequest.getClientRegistration().getRegistrationId();
-        var user = authService.resolveOrProvisionExternalAccount(email, organizationId);
+        var firstName = oidcUser.getGivenName();
+        var lastName = oidcUser.getFamilyName();
+        var user = authService.resolveOrProvisionExternalAccount(email, organizationId, firstName, lastName);
 
         return new ExternalUserPrincipal(user, oidcUser);
     }

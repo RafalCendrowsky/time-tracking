@@ -1,9 +1,9 @@
 package com.timetracking.auth.web;
 
 import com.timetracking.auth.dto.LoginOption;
-import com.timetracking.auth.model.domain.UserAccount;
 import com.timetracking.auth.service.LoginOptionService;
 import com.timetracking.auth.service.UserService;
+import com.timetracking.auth.web.user.dto.RegisterUserRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,10 +21,9 @@ public class AuthController {
     private final LoginOptionService loginOptionService;
 
     @PostMapping("/register")
-    public ResponseEntity<RegisterUserResponse> register(@Valid @RequestBody RegisterUserRequest request) {
-        UserAccount userAccount = authService.register(request.email(), request.password());
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(RegisterUserResponse.from(userAccount));
+    public ResponseEntity<Void> register(@Valid @RequestBody RegisterUserRequest request) {
+        authService.register(request.email(), request.password(), request.firstName(), request.lastName());
+        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     @GetMapping("/login-options")

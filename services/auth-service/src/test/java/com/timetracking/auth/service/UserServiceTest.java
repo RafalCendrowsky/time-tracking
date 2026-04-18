@@ -1,5 +1,6 @@
 package com.timetracking.auth.service;
 
+import com.timetracking.auth.constant.UserRole;
 import com.timetracking.auth.exception.DuplicateEmailException;
 import com.timetracking.auth.model.domain.UserAccount;
 import com.timetracking.auth.model.repository.UserAccountRepository;
@@ -44,13 +45,13 @@ class UserServiceTest {
             return account;
         });
 
-        UserAccount saved = userService.register(" Alice@Example.com ", "password123");
+        UserAccount saved = userService.register(" Alice@Example.com ", "password123", "Alice", "Something");
 
         var captor = ArgumentCaptor.forClass(UserAccount.class);
         verify(userAccountRepository).save(captor.capture());
         assertThat(captor.getValue().getEmail()).isEqualTo("alice@example.com");
         assertThat(captor.getValue().getPasswordHash()).isEqualTo("hashed-password");
-        assertThat(captor.getValue().getRoles()).containsExactly("USER");
+        assertThat(captor.getValue().getRoles()).containsExactly(UserRole.USER);
         assertThat(saved.getId()).isEqualTo("user-1");
         assertThat(saved.getCreatedAt()).isNotNull();
     }
@@ -59,7 +60,7 @@ class UserServiceTest {
     void registerRejectsDuplicateEmail() {
         when(userAccountRepository.existsByEmail("alice@example.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> userService.register("alice@example.com", "password123"))
+        assertThatThrownBy(() -> userService.register("alice@example.com", "password123", "Alice", "Something"))
                 .isInstanceOf(DuplicateEmailException.class);
     }
 
@@ -70,7 +71,9 @@ class UserServiceTest {
                 "alice@example.com",
                 "hashed",
                 "org-1",
-                Set.of("USER", "ADMIN"),
+                Set.of(UserRole.USER, UserRole.ADMIN),
+                "Alice",
+                "Something",
                 Instant.now(),
                 Instant.now()
         );
@@ -89,7 +92,8 @@ class UserServiceTest {
         when(userAccountRepository.findByEmail("alice@example.com")).thenReturn(Optional.empty());
         when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        UserAccount account = userService.resolveOrProvisionExternalAccount("alice@example.com", "org-1");
+        UserAccount account =
+                userService.resolveOrProvisionExternalAccount("alice@example.com", "org-1", "Alice", "Something");
 
         assertThat(account.getEmail()).isEqualTo("alice@example.com");
         assertThat(account.getPasswordHash()).isNull();

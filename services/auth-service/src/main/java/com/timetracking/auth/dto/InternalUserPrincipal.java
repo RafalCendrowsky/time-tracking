@@ -13,7 +13,7 @@ public record InternalUserPrincipal(UserAccount user) implements UserDetails {
     @NonNull
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return user.getRoles().stream()
-                .map(role -> (GrantedAuthority) () -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+                .map(role -> (GrantedAuthority) () -> "ROLE_" + role.name())
                 .toList();
     }
 

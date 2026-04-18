@@ -1,5 +1,6 @@
 package com.timetracking.auth.model.domain;
 
+import com.timetracking.auth.constant.UserRole;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -29,10 +30,13 @@ public class UserAccount {
 
     private String organizationId;
 
-    private Set<String> roles = new LinkedHashSet<>();
+    private Set<UserRole> roles = new LinkedHashSet<>();
+
+    private String firstName;
+
+    private String lastName;
 
     private Instant createdAt;
 
     private Instant updatedAt;
 }
-
