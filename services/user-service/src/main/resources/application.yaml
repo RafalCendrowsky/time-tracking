@@ -28,8 +28,7 @@ cors:
   max-age-seconds: 1800
 
 vault:
-  uri: ${VAULT_URI}
+  uri: ${VAULT_URI:http://localhost:8200}
   token: ${VAULT_TOKEN}
   kv-mount: ${VAULT_KV_MOUNT:secret}
   secret-path: ${VAULT_SECRET_PATH:user-service}
-

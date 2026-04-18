@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Sign in</title>
+    <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #1a1a2e;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, .10);
+            padding: 2.5rem 2rem;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: .25rem;
+        }
+
+        .subtitle {
+            font-size: .875rem;
+            color: #6b7280;
+            margin-bottom: 1.75rem;
+        }
+
+        label {
+            display: block;
+            font-size: .8125rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: .375rem;
+        }
+
+        input[type="email"], input[type="password"] {
+            width: 100%;
+            padding: .625rem .875rem;
+            border: 1.5px solid #d1d5db;
+            border-radius: 8px;
+            font-size: .9375rem;
+            outline: none;
+            transition: border-color .15s;
+        }
+
+        input:focus {
+            border-color: #6366f1;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: .5rem;
+            width: 100%;
+            padding: .6875rem 1rem;
+            border: none;
+            border-radius: 8px;
+            font-size: .9375rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity .15s, background .15s;
+        }
+
+        .btn:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #6366f1;
+            color: #fff;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #4f46e5;
+        }
+
+        .field {
+            margin-bottom: 1rem;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 1.25rem;
+            font-size: .8125rem;
+            color: #6366f1;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            text-decoration: underline;
+        }
+
+        .options-list {
+            display: flex;
+            flex-direction: column;
+            gap: .75rem;
+        }
+
+        .error-msg {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 8px;
+            padding: .625rem .875rem;
+            font-size: .8125rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid rgba(255, 255, 255, .4);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1 id="page-title">Sign in</h1>
+    <p id="page-subtitle" class="subtitle">Enter your email to continue</p>
+    <div id="error-msg" class="error-msg" role="alert"></div>
+    <!-- Step 1: Email -->
+    <div id="step-email">
+        <div class="field">
+            <label for="email">Email address</label>
+            <input id="email" type="email" placeholder="you@example.com" autocomplete="email" autofocus/>
+        </div>
+        <button id="btn-continue" class="btn btn-primary" onclick="handleContinue()">Continue</button>
+    </div>
+    <!-- Step 2a: Password (internal) — CSRF injected server-side -->
+    <div id="step-password" hidden>
+        <form id="internal-form" method="post" th:action="@{/login}">
+            <input id="username-hidden" type="hidden" name="username"/>
+            <div class="field">
+                <label for="password">Password</label>
+                <input id="password" type="password" name="password"
+                       placeholder="Your password" autocomplete="current-password"/>
+            </div>
+            <input id="csrf-token" type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <button type="submit" class="btn btn-primary">Sign in</button>
+        </form>
+        <button class="back-link" onclick="goBack()">Use a different email</button>
+    </div>
+    <!-- Step 2b: Multiple options -->
+    <div id="step-options" hidden>
+        <p id="options-hint" class="subtitle" style="margin-bottom:1rem"></p>
+        <div id="options-list" class="options-list"></div>
+        <button class="back-link" onclick="goBack()">Use a different email</button>
+    </div>
+    <!-- Step 3: Register (no account found) -->
+    <div id="step-register" hidden>
+        <div class="field">
+            <label for="reg-email">Email address</label>
+            <input id="reg-email" type="email" autocomplete="email" readonly/>
+        </div>
+        <div class="field">
+            <label for="reg-password">Password</label>
+            <input id="reg-password" type="password" placeholder="At least 8 characters" autocomplete="new-password"/>
+        </div>
+        <div class="field">
+            <label for="reg-password-confirm">Confirm password</label>
+            <input id="reg-password-confirm" type="password" placeholder="Repeat password" autocomplete="new-password"/>
+        </div>
+        <button id="btn-register" class="btn btn-primary" onclick="handleRegister()">Create account</button>
+        <button class="back-link" onclick="goBack()">Use a different email</button>
+    </div>
+</div>
+<script>
+    const $ = id => document.getElementById(id);
+    const DEFAULT_TITLE = 'Sign in';
+    const DEFAULT_SUBTITLE = 'Enter your email to continue';
+    const REGISTER_TITLE = 'Register account';
+    const REGISTER_SUBTITLE = 'Create your account below';
+    let currentEmail = '';
+    let loginOptionsLoading = false;
+
+    function setHeader(title, subtitle) {
+        $('page-title').textContent = title;
+        $('page-subtitle').textContent = subtitle;
+    }
+
+    async function handleContinue() {
+        if (loginOptionsLoading) {
+            return;
+        }
+        const email = $('email').value.trim();
+        if (!email) {
+            showError('Please enter your email address.');
+            return;
+        }
+        const btn = $('btn-continue');
+        loginOptionsLoading = true;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Checking\u2026';
+        hideError();
+        try {
+            const res = await fetch('/api/auth/login-options?email=' + encodeURIComponent(email));
+            if (!res.ok) {
+                showError('Could not look up login options. Please try again.');
+                return;
+            }
+            const options = await res.json();
+            currentEmail = email;
+            routeOptions(options);
+        } catch {
+            showError('Network error. Please try again.');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Continue';
+            loginOptionsLoading = false;
+        }
+    }
+
+    function routeOptions(options) {
+        if (options.length === 0) {
+            showRegisterStep();
+            return;
+        }
+        if (options.length === 1 && options[0].type === 'INTERNAL') {
+            showPasswordStep();
+            return;
+        }
+        if (options.length === 1) {
+            window.location.href = options[0].loginUrl;
+            return;
+        }
+        showOptionsStep(options);
+    }
+
+    function showPasswordStep() {
+        setHeader(DEFAULT_TITLE, DEFAULT_SUBTITLE);
+        $('step-email').hidden = true;
+        $('step-options').hidden = true;
+        $('step-register').hidden = true;
+        $('username-hidden').value = currentEmail;
+        $('step-password').hidden = false;
+        $('password').focus();
+    }
+
+    function showRegisterStep() {
+        setHeader(REGISTER_TITLE, REGISTER_SUBTITLE);
+        $('step-email').hidden = true;
+        $('step-password').hidden = true;
+        $('step-options').hidden = true;
+        $('step-register').hidden = false;
+        $('reg-email').value = currentEmail;
+        $('reg-password').focus();
+    }
+
+    function showOptionsStep(options) {
+        setHeader(DEFAULT_TITLE, DEFAULT_SUBTITLE);
+        $('step-email').hidden = true;
+        $('step-password').hidden = true;
+        $('step-register').hidden = true;
+        $('options-hint').textContent = 'Choose how to sign in as ' + currentEmail;
+        const list = $('options-list');
+        list.innerHTML = '';
+        const sorted = [...options].sort((a, b) => a.type === 'INTERNAL' ? 1 : b.type === 'INTERNAL' ? -1 : 0);
+        for (const opt of sorted) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-outline';
+            if (opt.type === 'INTERNAL') {
+                btn.textContent = '\uD83D\uDD11 Sign in with password';
+                btn.onclick = showPasswordStep;
+            } else {
+                btn.textContent = '\uD83C\uDFE2 ' + (opt.organizationName || opt.label || 'SSO');
+                btn.onclick = () => {
+                    window.location.href = opt.loginUrl;
+                };
+            }
+            list.appendChild(btn);
+        }
+        $('step-options').hidden = false;
+    }
+
+    function goBack() {
+        setHeader(DEFAULT_TITLE, DEFAULT_SUBTITLE);
+        $('step-password').hidden = true;
+        $('step-options').hidden = true;
+        $('step-register').hidden = true;
+        $('step-email').hidden = false;
+        $('options-list').innerHTML = '';
+        $('email').focus();
+        hideError();
+    }
+
+    async function handleRegister() {
+        const password = $('reg-password').value;
+        const confirm = $('reg-password-confirm').value;
+        if (password.length < 8) {
+            showError('Password must be at least 8 characters.');
+            return;
+        }
+        if (password !== confirm) {
+            showError('Passwords do not match.');
+            return;
+        }
+        const btn = $('btn-register');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Creating account\u2026';
+        hideError();
+        try {
+            const csrfToken = $('csrf-token').value;
+            const res = await fetch('/api/auth/register', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-XSRF-TOKEN': csrfToken
+                },
+                body: JSON.stringify({email: currentEmail, password})
+            });
+            if (res.status === 201) {
+                window.location.href = '/login?registered';
+            } else if (res.status === 409) {
+                showError('An account with this email already exists.');
+            } else {
+                const body = await res.json().catch(() => ({}));
+                showError(body.message || 'Registration failed. Please try again.');
+            }
+        } catch {
+            showError('Network error. Please try again.');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Create account';
+        }
+    }
+
+    function showError(msg) {
+        const e = $('error-msg');
+        e.textContent = msg;
+        e.style.display = 'block';
+    }
+
+    function hideError() {
+        $('error-msg').style.display = 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setHeader(DEFAULT_TITLE, DEFAULT_SUBTITLE);
+        $('email').addEventListener('keydown', e => {
+            if (e.key === 'Enter') handleContinue();
+        });
+        const p = new URLSearchParams(window.location.search);
+        if (p.has('error')) {
+            showError('Incorrect password. Please try again.');
+            showPasswordStep();
+        }
+        if (p.has('registered')) {
+            showError('Account created! Please sign in.');
+            const errorMsg = $('error-msg');
+            errorMsg.style.background = '#f0fdf4';
+            errorMsg.style.color = '#16a34a';
+            errorMsg.style.borderColor = '#bbf7d0';
+            errorMsg.style.display = 'block';
+        }
+    });
+</script>
+</body>
+</html>
+
