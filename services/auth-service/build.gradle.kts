@@ -3,7 +3,6 @@ plugins {
     id("org.springframework.boot") version "4.0.5"
     id("io.spring.dependency-management") version "1.1.7"
 }
-val springCloudVersion by extra("2025.1.1")
 
 group = "com.timetracking"
 version = "0.0.1-SNAPSHOT"
