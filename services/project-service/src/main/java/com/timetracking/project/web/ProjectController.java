@@ -1,14 +1,16 @@
 package com.timetracking.project.web;
 
-import com.timetracking.project.dto.CreateProjectRequest;
-import com.timetracking.project.dto.ProjectResponse;
-import com.timetracking.project.dto.UpdateProjectRequest;
+import com.timetracking.project.security.UserPrincipal;
 import com.timetracking.project.service.ProjectService;
+import com.timetracking.project.web.dto.CreateProjectRequest;
+import com.timetracking.project.web.dto.ProjectResponse;
+import com.timetracking.project.web.dto.ProjectTreeResponse;
+import com.timetracking.project.web.dto.UpdateProjectRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,27 +23,29 @@ public class ProjectController {
 
     private final ProjectService projectService;
 
+    @GetMapping
+    public List<ProjectTreeResponse> getAll(@AuthenticationPrincipal UserPrincipal principal) {
+        return projectService.findAllFor(principal);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasPermission(#request.parentId(), 'MANAGE_SUBPROJECT')")
     public ProjectResponse create(
             @Valid @RequestBody CreateProjectRequest request,
-            @AuthenticationPrincipal Jwt jwt
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
-        UUID userId = UUID.fromString(jwt.getSubject());
-        return projectService.create(request, userId);
+        return projectService.create(request, principal.id());
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasPermission(#id, 'VIEW_PROJECT')")
     public ProjectResponse getById(@PathVariable UUID id) {
         return projectService.getById(id);
     }
 
-    @GetMapping
-    public List<ProjectResponse> getAll() {
-        return projectService.getAll();
-    }
-
     @PutMapping("/{id}")
+    @PreAuthorize("hasPermission(#id, 'MANAGE_PROJECT')")
     public ProjectResponse update(
             @PathVariable UUID id,
             @RequestBody UpdateProjectRequest request
@@ -51,8 +55,8 @@ public class ProjectController {
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasPermission(#id, 'MANAGE_SUBPROJECT')")
     public void delete(@PathVariable UUID id) {
         projectService.delete(id);
     }
 }
-

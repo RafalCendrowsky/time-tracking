@@ -1,4 +1,4 @@
-package com.timetracking.project.dto;
+package com.timetracking.project.web.dto;
 
 import jakarta.validation.constraints.NotNull;
 
