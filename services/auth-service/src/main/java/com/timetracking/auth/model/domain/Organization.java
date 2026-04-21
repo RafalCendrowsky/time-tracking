@@ -10,6 +10,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -18,7 +19,7 @@ import java.util.Set;
 @Document(collection = "organizations")
 public class Organization {
     @Id
-    private String id;
+    private UUID id;
 
     @Indexed(unique = true)
     private String name;

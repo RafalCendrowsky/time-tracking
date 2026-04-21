@@ -11,6 +11,7 @@ import org.springframework.security.oauth2.core.oidc.OidcScopes;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +28,7 @@ public class ClientRegistrationService implements ClientRegistrationRepository {
             return null;
         }
         return clientRegistrationCache.computeIfAbsent(
-                registrationId, id -> organizationRepository.findById(id)
+                registrationId, id -> organizationRepository.findById(UUID.fromString(id))
                         .filter(it -> it.getExternalIdp() != null)
                         .map(this::createClientRegistration)
                         .orElseThrow(() -> new IllegalArgumentException(
@@ -44,7 +45,7 @@ public class ClientRegistrationService implements ClientRegistrationRepository {
         var clientSecret = vaultService.get(idp.getClientSecretRef());
         return ClientRegistrations
                 .fromIssuerLocation(idp.getDiscoveryUri())
-                .registrationId(organization.getId())
+                .registrationId(organization.getId().toString())
                 .clientId(idp.getClientId())
                 .clientSecret(clientSecret)
                 .clientName(organization.getName())

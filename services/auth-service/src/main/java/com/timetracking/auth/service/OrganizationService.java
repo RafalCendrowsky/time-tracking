@@ -11,6 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -22,7 +23,7 @@ public class OrganizationService {
         return organizationRepository.findAll();
     }
 
-    public Organization findById(String id) {
+    public Organization findById(UUID id) {
         return organizationRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization not found: " + id));
     }
@@ -31,21 +32,24 @@ public class OrganizationService {
         return organizationRepository.save(applyRequest(new Organization(), request));
     }
 
-    public Organization update(String id, OrganizationRequest request) {
+    public Organization update(UUID id, OrganizationRequest request) {
         var org = applyRequest(findById(id), request);
-        clientRegistrationService.evict(id);
+        clientRegistrationService.evict(id.toString());
         return organizationRepository.save(org);
     }
 
-    public void delete(String id) {
+    public void delete(UUID id) {
         if (!organizationRepository.existsById(id)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Organization not found: " + id);
         }
-        clientRegistrationService.evict(id);
+        clientRegistrationService.evict(id.toString());
         organizationRepository.deleteById(id);
     }
 
     private Organization applyRequest(Organization org, OrganizationRequest request) {
+        if (org.getId() == null) {
+            org.setId(UUID.randomUUID());
+        }
         org.setName(request.name());
         org.setDomains(Optional.ofNullable(request.domains()).orElseGet(LinkedHashSet::new));
         org.setExternalIdp(toIdpConfig(request.externalIdp()));

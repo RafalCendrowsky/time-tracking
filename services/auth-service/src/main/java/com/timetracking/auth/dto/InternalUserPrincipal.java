@@ -25,7 +25,7 @@ public record InternalUserPrincipal(UserAccount user) implements UserDetails {
     @Override
     @NonNull
     public String getUsername() {
-        return user.getId();
+        return user.getId().toString();
     }
 }
 

@@ -8,6 +8,8 @@ spring:
     port: ${MONGO_PORT:27017}
     database: ${MONGO_DB:time-tracking}
     authentication-database: ${MONGO_AUTH_DB:admin}
+    representation:
+      uuid: standard
 
 oauth2:
   internal:

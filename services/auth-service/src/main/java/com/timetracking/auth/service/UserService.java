@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static com.timetracking.auth.util.NormalizationUtil.normalizeEmail;
 
@@ -34,7 +35,7 @@ public class UserService implements UserDetailsService {
         return userAccountRepository.findByEmail(normalizeEmail(email));
     }
 
-    public UserAccount findById(String id) {
+    public UserAccount findById(UUID id) {
         return userAccountRepository.findById(id)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + id));
     }
@@ -56,14 +57,14 @@ public class UserService implements UserDetailsService {
         return new InternalUserPrincipal(account);
     }
 
-    public UserAccount updateRoles(String id, Set<UserRole> roles) {
+    public UserAccount updateRoles(UUID id, Set<UserRole> roles) {
         var account = findById(id);
         account.setRoles(roles);
         account.setUpdatedAt(Instant.now());
         return userAccountRepository.save(account);
     }
 
-    public UserAccount updateProfile(String id, String firstName, String lastName) {
+    public UserAccount updateProfile(UUID id, String firstName, String lastName) {
         var account = findById(id);
         account.setFirstName(firstName);
         account.setLastName(lastName);
@@ -88,7 +89,7 @@ public class UserService implements UserDetailsService {
 
     public UserAccount resolveOrProvisionExternalAccount(
             String email,
-            String organizationId,
+            UUID organizationId,
             String firstName,
             String lastName
     ) {
@@ -119,13 +120,13 @@ public class UserService implements UserDetailsService {
     private UserAccount newUserAccount(
             String email,
             String password,
-            String organizationId,
+            UUID organizationId,
             String firstName,
             String lastName
     ) {
         var now = Instant.now();
         return new UserAccount(
-                null,
+                UUID.randomUUID(),
                 email,
                 password,
                 organizationId,

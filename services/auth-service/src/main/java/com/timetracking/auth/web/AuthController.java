@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -39,7 +40,7 @@ public class AuthController {
     }
 
     @GetMapping("/login/external/{organizationId}")
-    public ResponseEntity<Void> externalLogin(@PathVariable String organizationId) {
+    public ResponseEntity<Void> externalLogin(@PathVariable UUID organizationId) {
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create("/oauth2/authorization/" + organizationId))
                 .build();

@@ -11,6 +11,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/organizations")
@@ -26,7 +27,7 @@ public class OrganizationRestController {
     }
 
     @GetMapping("/{id}")
-    public OrganizationDetailResponse findById(@PathVariable String id) {
+    public OrganizationDetailResponse findById(@PathVariable UUID id) {
         return OrganizationDetailResponse.from(organizationService.findById(id));
     }
 
@@ -37,13 +38,13 @@ public class OrganizationRestController {
     }
 
     @PutMapping("/{id}")
-    public OrganizationDetailResponse update(@PathVariable String id, @Valid @RequestBody OrganizationRequest request) {
+    public OrganizationDetailResponse update(@PathVariable UUID id, @Valid @RequestBody OrganizationRequest request) {
         return OrganizationDetailResponse.from(organizationService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable String id) {
+    public void delete(@PathVariable UUID id) {
         organizationService.delete(id);
     }
 }

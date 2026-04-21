@@ -12,6 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/users")
@@ -31,7 +32,7 @@ public class UserRestController {
 
     @PutMapping("/{id}/roles")
     @PreAuthorize("hasRole('ADMIN')")
-    public UserResponse updateRoles(@PathVariable String id, @Valid @RequestBody UpdateRolesRequest request) {
+    public UserResponse updateRoles(@PathVariable UUID id, @Valid @RequestBody UpdateRolesRequest request) {
         return UserResponse.from(userService.updateRoles(id, request.roles()));
     }
 
@@ -40,8 +41,9 @@ public class UserRestController {
             @AuthenticationPrincipal UserDetails principal,
             @RequestBody UpdateProfileRequest request
     ) {
+        var userId = UUID.fromString(principal.getUsername());
         return UserResponse.from(
-                userService.updateProfile(principal.getUsername(), request.firstName(), request.lastName()));
+                userService.updateProfile(userId, request.firstName(), request.lastName()));
     }
 }
 

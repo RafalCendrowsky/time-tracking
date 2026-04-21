@@ -12,6 +12,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -21,14 +22,14 @@ import java.util.Set;
 public class UserAccount {
 
     @Id
-    private String id;
+    private UUID id;
 
     @Indexed(unique = true)
     private String email;
 
     private String passwordHash;
 
-    private String organizationId;
+    private UUID organizationId;
 
     private Set<UserRole> roles = new LinkedHashSet<>();
 

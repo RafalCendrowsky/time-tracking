@@ -4,9 +4,10 @@ import com.timetracking.auth.model.domain.Organization;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 public record OrganizationDetailResponse(
-        String id,
+        UUID id,
         String name,
         Set<String> domains,
         IdpConfigDto externalIdp

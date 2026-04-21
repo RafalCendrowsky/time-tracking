@@ -5,9 +5,10 @@ import com.timetracking.auth.model.domain.UserAccount;
 
 import java.time.Instant;
 import java.util.Set;
+import java.util.UUID;
 
 public record RegisterUserResponse(
-        String id,
+        UUID id,
         String email,
         String firstName,
         String lastName,

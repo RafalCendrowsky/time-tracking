@@ -6,8 +6,9 @@ import org.springframework.data.mongodb.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-public interface UserAccountRepository extends MongoRepository<UserAccount, String> {
+public interface UserAccountRepository extends MongoRepository<UserAccount, UUID> {
 
     Optional<UserAccount> findByEmail(String email);
 

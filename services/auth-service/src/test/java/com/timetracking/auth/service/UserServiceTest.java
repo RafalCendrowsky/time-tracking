@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,7 +42,7 @@ class UserServiceTest {
         when(passwordEncoder.encode("password123")).thenReturn("hashed-password");
         when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> {
             UserAccount account = invocation.getArgument(0);
-            account.setId("user-1");
+            account.setId(UUID.fromString("11111111-1111-1111-1111-111111111111"));
             return account;
         });
 
@@ -52,7 +53,7 @@ class UserServiceTest {
         assertThat(captor.getValue().getEmail()).isEqualTo("alice@example.com");
         assertThat(captor.getValue().getPasswordHash()).isEqualTo("hashed-password");
         assertThat(captor.getValue().getRoles()).containsExactly(UserRole.USER);
-        assertThat(saved.getId()).isEqualTo("user-1");
+        assertThat(saved.getId()).isEqualTo(UUID.fromString("11111111-1111-1111-1111-111111111111"));
         assertThat(saved.getCreatedAt()).isNotNull();
     }
 
@@ -67,10 +68,10 @@ class UserServiceTest {
     @Test
     void loadUserByUsernameMapsRolesToAuthorities() {
         UserAccount account = new UserAccount(
-                "user-1",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 "alice@example.com",
                 "hashed",
-                "org-1",
+                UUID.fromString("22222222-2222-2222-2222-222222222222"),
                 Set.of(UserRole.USER, UserRole.ADMIN),
                 "Alice",
                 "Something",
@@ -81,7 +82,7 @@ class UserServiceTest {
 
         UserDetails userDetails = userService.loadUserByUsername("Alice@Example.com");
 
-        assertThat(userDetails.getUsername()).isEqualTo("user-1");
+        assertThat(userDetails.getUsername()).isEqualTo("11111111-1111-1111-1111-111111111111");
         assertThat(userDetails.getAuthorities())
                 .extracting("authority")
                 .containsExactlyInAnyOrder("ROLE_USER", "ROLE_ADMIN");
@@ -93,11 +94,16 @@ class UserServiceTest {
         when(userAccountRepository.save(any(UserAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         UserAccount account =
-                userService.resolveOrProvisionExternalAccount("alice@example.com", "org-1", "Alice", "Something");
+                userService.resolveOrProvisionExternalAccount(
+                        "alice@example.com",
+                        UUID.fromString("22222222-2222-2222-2222-222222222222"),
+                        "Alice",
+                        "Something"
+                );
 
         assertThat(account.getEmail()).isEqualTo("alice@example.com");
         assertThat(account.getPasswordHash()).isNull();
-        assertThat(account.getOrganizationId()).isEqualTo("org-1");
+        assertThat(account.getOrganizationId()).isEqualTo(UUID.fromString("22222222-2222-2222-2222-222222222222"));
     }
 }
 

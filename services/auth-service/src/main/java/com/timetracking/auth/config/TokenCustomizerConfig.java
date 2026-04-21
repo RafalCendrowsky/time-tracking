@@ -18,15 +18,17 @@ public class TokenCustomizerConfig {
             var isAccessToken = context.getTokenType() == OAuth2TokenType.ACCESS_TOKEN;
             switch (context.getPrincipal().getPrincipal()) {
                 case InternalUserPrincipal(UserAccount user) -> {
-                    context.getClaims().subject(user.getId());
+                    context.getClaims().subject(user.getId().toString());
                     if (isAccessToken) {
                         context.getClaims().claim("roles", user.getRoles());
                     }
                 }
                 case ExternalUserPrincipal(UserAccount user, _) -> {
-                    context.getClaims().subject(user.getId());
+                    context.getClaims().subject(user.getId().toString());
                     if (isAccessToken) {
-                        context.getClaims().claim("organization_id", user.getOrganizationId());
+                        if (user.getOrganizationId() != null) {
+                            context.getClaims().claim("organization_id", user.getOrganizationId().toString());
+                        }
                         context.getClaims().claim("roles", user.getRoles());
                     }
                 }

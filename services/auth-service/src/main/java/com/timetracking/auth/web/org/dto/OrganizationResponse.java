@@ -3,9 +3,10 @@ package com.timetracking.auth.web.org.dto;
 import com.timetracking.auth.model.domain.Organization;
 
 import java.util.Set;
+import java.util.UUID;
 
 public record OrganizationResponse(
-        String id,
+        UUID id,
         String name,
         Set<String> domains,
         boolean hasExternalIdp

@@ -16,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -40,7 +41,7 @@ class AuthControllerTest {
     @Test
     void registerReturnsCreatedUser() throws Exception {
         var userAccount = new UserAccount(
-                "user-1",
+                UUID.fromString("11111111-1111-1111-1111-111111111111"),
                 "alice@example.com",
                 "hashed",
                 null,
@@ -66,7 +67,7 @@ class AuthControllerTest {
     void loginOptionsReturnsConfiguredLoginRoutes() throws Exception {
         when(loginOptionService.findLoginOptions("alice@example.com")).thenReturn(List.of(
                 LoginOption.internal("/api/auth/login/internal"),
-                LoginOption.external("org-1", "Acme", "/api/auth/login/external/org-1")
+                LoginOption.external("22222222-2222-2222-2222-222222222222", "Acme", "/api/auth/login/external/22222222-2222-2222-2222-222222222222")
         ));
 
         mockMvc.perform(get("/api/auth/login-options")
@@ -85,9 +86,9 @@ class AuthControllerTest {
 
     @Test
     void externalLoginRedirectsToOrganizationAuthorizationEndpoint() throws Exception {
-        mockMvc.perform(get("/api/auth/login/external/{organizationId}", "org-1"))
+        mockMvc.perform(get("/api/auth/login/external/{organizationId}", "22222222-2222-2222-2222-222222222222"))
                 .andExpect(status().isFound())
-                .andExpect(redirectedUrl("/oauth2/authorization/org-1"));
+                .andExpect(redirectedUrl("/oauth2/authorization/22222222-2222-2222-2222-222222222222"));
     }
 
 }

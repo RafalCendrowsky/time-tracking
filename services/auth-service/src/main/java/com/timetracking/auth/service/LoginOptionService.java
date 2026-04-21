@@ -28,7 +28,7 @@ public class LoginOptionService {
                 options.put(LoginOptionType.INTERNAL, LoginOption.internal("/api/auth/login/internal"));
             }
 
-            if (StringUtils.hasText(account.getOrganizationId())) {
+            if (account.getOrganizationId() != null) {
                 organizationRepository.findById(account.getOrganizationId())
                         .filter(org -> org.getExternalIdp() != null)
                         .ifPresent(org -> options.put(
@@ -52,7 +52,7 @@ public class LoginOptionService {
     }
 
     private static LoginOption externalOption(Organization org) {
-        return LoginOption.external(org.getId(), org.getName(), "/api/auth/login/external/" + org.getId());
+        return LoginOption.external(org.getId().toString(), org.getName(), "/api/auth/login/external/" + org.getId());
     }
 
     private static String extractDomain(String email) {

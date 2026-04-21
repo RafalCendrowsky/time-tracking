@@ -1,6 +1,7 @@
 package com.timetracking.auth.dto;
 
 import com.timetracking.auth.model.domain.UserAccount;
+import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.oidc.OidcIdToken;
 import org.springframework.security.oauth2.core.oidc.OidcUserInfo;
@@ -31,14 +32,14 @@ public record ExternalUserPrincipal(UserAccount user, OidcUser delegate) impleme
     }
 
     @Override
-    public Collection<? extends GrantedAuthority> getAuthorities() {
+    public @NonNull Collection<? extends GrantedAuthority> getAuthorities() {
         return user.getRoles().stream()
                 .map(role -> (GrantedAuthority) () -> "ROLE_" + role)
                 .toList();
     }
 
     @Override
-    public String getName() {
-        return user.getId();
+    public @NonNull String getName() {
+        return user.getId().toString();
     }
 }
