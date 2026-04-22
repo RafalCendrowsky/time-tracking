@@ -38,7 +38,7 @@ spec:
             - sh
             - -c
             - |
-              until nc -z {{ .Release.Name }}-postgresql 5432; do
+              until nc -z {{ .Release.Name }}-postgresql-rw 5432; do
                 echo "Waiting for PostgreSQL..."; sleep 3;
               done
         - name: wait-for-vault
@@ -61,7 +61,7 @@ spec:
               done
       containers:
         - name: project-service
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ if .Values.image.registry }}{{ .Values.image.registry }}/{{ end }}{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.containerPort }}

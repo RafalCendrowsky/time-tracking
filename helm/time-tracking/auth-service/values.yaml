@@ -2,6 +2,7 @@ replicaCount: 1
 
 image:
   repository: time-tracking/auth-service
+  registry: ""
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -23,7 +24,6 @@ config:
 secrets:
   mongoUser: ""
   mongoPass: ""
-  vaultToken: ""
   oauth2ClientId: ""
 
 containerPort: 8443
@@ -44,4 +44,3 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-

@@ -6,18 +6,6 @@ version: 0.1.0
 appVersion: "1.0.0"
 
 dependencies:
-  - name: cert-manager
-    version: "~1.x"
-    repository: https://charts.jetstack.io
-    alias: cert-manager
-  - name: mongodb
-    version: "~16.x"
-    repository: https://charts.bitnami.com/bitnami
-    alias: mongodb
-  - name: postgresql
-    version: "~16.x"
-    repository: https://charts.bitnami.com/bitnami
-    alias: postgresql
   - name: vault
     version: "~0.28.x"
     repository: https://helm.releases.hashicorp.com

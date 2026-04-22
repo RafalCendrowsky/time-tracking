@@ -1,0 +1,52 @@
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: {{ .Release.Name }}-mongodb
+  namespace: {{ .Release.Namespace }}
+spec:
+  members: 1
+  type: ReplicaSet
+  version: {{ .Values.mongodb.version | quote }}
+  security:
+    authentication:
+      modes: ["SCRAM"]
+    tls:
+      enabled: true
+      certificateKeySecretRef:
+        name: {{ .Release.Name }}-mongodb-tls
+      caCertificateSecretRef:
+        name: {{ .Release.Name }}-mongodb-tls
+  users:
+    - name: root
+      db: admin
+      passwordSecretRef:
+        name: {{ .Release.Name }}-mongodb-root-credentials
+      roles:
+        - name: root
+          db: admin
+      scramCredentialsSecretName: {{ .Release.Name }}-mongodb-root-scram
+    - name: {{ .Values.mongodb.username }}
+      db: admin
+      passwordSecretRef:
+        name: {{ .Release.Name }}-mongodb-credentials
+      roles:
+        - name: readWrite
+          db: {{ .Values.mongodb.database }}
+        - name: dbAdmin
+          db: {{ .Values.mongodb.database }}
+      scramCredentialsSecretName: {{ .Release.Name }}-mongodb-user-scram
+  statefulSet:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: mongod
+              resources:
+                requests:
+                  cpu: 200m
+                  memory: 256Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+  additionalMongodConfig:
+    storage.wiredTiger.engineConfig.journalCompressor: zstd

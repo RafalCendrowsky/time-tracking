@@ -1,5 +1,10 @@
 AGENTS.md
 docker-compose.yml
+helm/**/charts/*.tgz
+helm/**/secrets.yaml
+helm/**/*.secret.yaml
+vault-init-keys.json
+**/vault-init-keys.json
 
 ### IntelliJ IDEA ###
 .idea

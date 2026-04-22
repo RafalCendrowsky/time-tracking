@@ -38,29 +38,11 @@ spec:
   secretName: {{ $rel }}-mongodb-tls
   duration: 8760h
   renewBefore: 720h
-  commonName: {{ $rel }}-mongodb
+  commonName: {{ $rel }}-mongodb-svc
   dnsNames:
-    - {{ $rel }}-mongodb
-    - {{ $rel }}-mongodb.{{ $ns }}.svc.cluster.local
-    - "*.{{ $rel }}-mongodb-headless.{{ $ns }}.svc.cluster.local"
-  issuerRef:
-    name: {{ $issuerName }}
-    kind: {{ $issuerKind }}
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: {{ $rel }}-postgresql-tls
-  namespace: {{ $ns }}
-spec:
-  secretName: {{ $rel }}-postgresql-tls
-  duration: 8760h
-  renewBefore: 720h
-  commonName: {{ $rel }}-postgresql
-  dnsNames:
-    - {{ $rel }}-postgresql
-    - {{ $rel }}-postgresql.{{ $ns }}.svc.cluster.local
-    - "*.{{ $rel }}-postgresql-hl.{{ $ns }}.svc.cluster.local"
+    - {{ $rel }}-mongodb-svc
+    - {{ $rel }}-mongodb-svc.{{ $ns }}.svc.cluster.local
+    - "*.{{ $rel }}-mongodb-svc.{{ $ns }}.svc.cluster.local"
   issuerRef:
     name: {{ $issuerName }}
     kind: {{ $issuerKind }}
@@ -95,6 +77,23 @@ spec:
   dnsNames:
     - {{ $rel }}-project-service
     - {{ $rel }}-project-service.{{ $ns }}.svc.cluster.local
+  issuerRef:
+    name: {{ $issuerName }}
+    kind: {{ $issuerKind }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $rel }}-vault-agent-injector-certificate
+  namespace: {{ $ns }}
+spec:
+  secretName: {{ $rel }}-vault-agent-injector-tls
+  duration: 8760h
+  renewBefore: 720h
+  dnsNames:
+    - {{ $rel }}-vault-agent-injector-svc
+    - {{ $rel }}-vault-agent-injector-svc.{{ $ns }}.svc
+    - {{ $rel }}-vault-agent-injector-svc.{{ $ns }}.svc.cluster.local
   issuerRef:
     name: {{ $issuerName }}
     kind: {{ $issuerKind }}

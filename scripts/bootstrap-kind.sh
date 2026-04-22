@@ -4,6 +4,7 @@ set -euo pipefail
 CLUSTER_NAME="time-tracking-kind"
 NAMESPACE="time-tracking"
 RELEASE_NAME="time-tracking"
+REGISTRY=""
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHART_PATH="${REPO_ROOT}/helm/time-tracking"
 VALUES_FILE="${CHART_PATH}/values.yaml"
@@ -17,6 +18,7 @@ Options:
   --cluster-name NAME   Kind cluster name (default: time-tracking-kind)
   --namespace NAME      Kubernetes namespace (default: time-tracking)
   --release-name NAME   Helm release name (default: time-tracking)
+  --registry NAME       Image registry prefix (default: empty)
   --chart-path PATH     Helm chart path (default: helm/time-tracking)
   --values-file PATH    Helm values file (default: helm/time-tracking/values.yaml)
   --rebuild-images      Force rebuild auth/project images before loading into kind
@@ -36,6 +38,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --release-name)
       RELEASE_NAME="$2"
+      shift 2
+      ;;
+    --registry)
+      REGISTRY="$2"
       shift 2
       ;;
     --chart-path)
@@ -79,7 +85,7 @@ run_checked() {
 }
 
 image_exists() {
-  docker image inspect "$1" >/dev/null 2>&1
+  docker image inspect "$1" >/dev/null 2>&1 || return 1
 }
 
 ensure_image() {
@@ -93,8 +99,25 @@ ensure_image() {
     echo "Reusing existing local image $image"
   fi
 
-  echo "Loading $image into kind cluster $CLUSTER_NAME"
-  run_checked "kind load docker-image $image" kind load docker-image "$image" --name "$CLUSTER_NAME"
+  local archive_path
+  archive_path="$(mktemp -t "${CLUSTER_NAME}-$(basename "$image").XXXXXX.tar")"
+  trap 'rm -f "$archive_path"' RETURN
+
+  echo "Saving $image to $archive_path"
+  run_checked "docker save for $image" docker save -o "$archive_path" "$image"
+
+  echo "Loading $image archive into kind cluster $CLUSTER_NAME"
+  run_checked "kind load image-archive $image" kind load image-archive "$archive_path" --name "$CLUSTER_NAME"
+}
+
+image_name() {
+  local repository="$1"
+
+  if [[ -z "$REGISTRY" ]]; then
+    printf '%s\n' "$repository"
+  else
+    printf '%s/%s\n' "$REGISTRY" "$repository"
+  fi
 }
 
 require_cmd kind
@@ -111,7 +134,8 @@ fi
 
 echo "Adding Helm repositories"
 run_checked "helm repo add jetstack" helm repo add jetstack https://charts.jetstack.io --force-update
-run_checked "helm repo add bitnami" helm repo add bitnami https://charts.bitnami.com/bitnami --force-update
+run_checked "helm repo add cnpg" helm repo add cnpg https://cloudnative-pg.github.io/charts --force-update
+run_checked "helm repo add mongodb" helm repo add mongodb https://mongodb.github.io/helm-charts --force-update
 run_checked "helm repo add hashicorp" helm repo add hashicorp https://helm.releases.hashicorp.com --force-update
 run_checked "helm repo update" helm repo update
 
@@ -120,6 +144,7 @@ run_checked "helm upgrade --install cert-manager" helm upgrade --install cert-ma
   --namespace cert-manager \
   --create-namespace \
   --set crds.enabled=true \
+  --history-max 1 \
   --wait \
   --timeout 10m
 
@@ -140,21 +165,76 @@ fi
 echo "Updating chart dependencies"
 run_checked "helm dependency update" helm dependency update "$CHART_PATH"
 
-ensure_image "time-tracking/auth-service:latest" "${REPO_ROOT}/services/auth-service"
-ensure_image "time-tracking/project-service:latest" "${REPO_ROOT}/services/project-service"
+echo "Installing CloudNativePG operator"
+run_checked "helm upgrade --install cnpg-operator" helm upgrade --install cnpg-operator cnpg/cloudnative-pg \
+  --namespace cnpg-system \
+  --create-namespace \
+  --set installCRDs=true \
+  --history-max 1 \
+  --wait \
+  --timeout 5m
+
+echo "Installing MongoDB Community operator"
+run_checked "helm upgrade --install community-operator" helm upgrade --install mongodb-operator mongodb/community-operator \
+  --namespace mongodb \
+  --create-namespace \
+  --set installCRDs=true \
+  --set operator.watchNamespace="*" \
+  --history-max 1 \
+  --wait \
+  --timeout 5m
+
+wait_for_crd() {
+  local crd="$1"
+  local timeout_seconds=${2:-120}
+  local end_time=$(( $(date +%s) + timeout_seconds ))
+  while [ $(date +%s) -lt $end_time ]; do
+    if kubectl get crd "$crd" >/dev/null 2>&1; then
+      echo "CRD $crd is present"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Timed out waiting for CRD $crd" >&2
+  return 1
+}
+
+echo "Waiting for operator CRDs to be established"
+if ! wait_for_crd "clusters.postgresql.cnpg.io" 120; then
+  echo "clusters.postgresql.cnpg.io not found, attempting alternative name" >&2
+  wait_for_crd "cluster.postgresql.cnpg.io" 60 || echo "CNPG CRD not detected after retries" >&2
+fi
+
+if ! wait_for_crd "mongodbcommunity.mongodbcommunity.mongodb.com" 120; then
+  echo "mongodbcommunity.mongodbcommunity.mongodb.com not found after timeout" >&2
+fi
+
+ensure_image "$(image_name 'time-tracking/auth-service:latest')" "${REPO_ROOT}/services/auth-service"
+ensure_image "$(image_name 'time-tracking/project-service:latest')" "${REPO_ROOT}/services/project-service"
 
 echo "Creating namespace '$NAMESPACE' if needed"
 if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
   run_checked "kubectl create namespace" kubectl create namespace "$NAMESPACE"
 fi
 
+SECRETS_FILE="$(dirname "$VALUES_FILE")/secrets.yaml"
+
 echo "Deploying Helm release '$RELEASE_NAME'"
-run_checked "helm upgrade --install $RELEASE_NAME" helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
-  --namespace "$NAMESPACE" \
-  --create-namespace \
-  --values "$VALUES_FILE" \
-  --wait \
+helm_args=(
+  upgrade --install "$RELEASE_NAME" "$CHART_PATH"
+  --namespace "$NAMESPACE"
+  --create-namespace
+  --values "$VALUES_FILE"
+  --skip-crds
+  --history-max 3
+  --wait
   --timeout 15m
+)
+if [[ -f "$SECRETS_FILE" ]]; then
+  echo "Applying secrets override from $SECRETS_FILE"
+  helm_args+=(--values "$SECRETS_FILE")
+fi
+run_checked "helm upgrade --install $RELEASE_NAME" helm "${helm_args[@]}"
 
 echo
 echo "Bootstrap complete."

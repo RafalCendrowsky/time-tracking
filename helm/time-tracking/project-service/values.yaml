@@ -2,6 +2,7 @@ replicaCount: 1
 
 image:
   repository: time-tracking/project-service
+  registry: ""
   tag: latest
   pullPolicy: IfNotPresent
 
@@ -17,7 +18,6 @@ config:
 secrets:
   dbUser: ""
   dbPass: ""
-  vaultToken: ""
 
 containerPort: 8443
 
@@ -37,4 +37,3 @@ resources:
   limits:
     cpu: 500m
     memory: 512Mi
-
