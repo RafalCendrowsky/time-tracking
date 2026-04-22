@@ -1,0 +1,40 @@
+replicaCount: 1
+
+image:
+  repository: time-tracking/project-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+config:
+  dbUrl: ""
+  vaultUri: ""
+  vaultKvMount: secret
+  vaultSecretPath: project-service
+  authServerIssuer: ""
+  authServerJwkSetUri: ""
+  corsAllowedOrigins: ""
+
+secrets:
+  dbUser: ""
+  dbPass: ""
+  vaultToken: ""
+
+containerPort: 8443
+
+service:
+  type: ClusterIP
+  port: 443
+
+ingress:
+  enabled: false
+  className: nginx
+  host: api.time-tracking.local
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+

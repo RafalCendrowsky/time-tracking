@@ -1,0 +1,31 @@
+apiVersion: v2
+name: time-tracking
+description: Umbrella Helm chart for the time-tracking platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+  - name: cert-manager
+    version: "~1.x"
+    repository: https://charts.jetstack.io
+    alias: cert-manager
+  - name: mongodb
+    version: "~16.x"
+    repository: https://charts.bitnami.com/bitnami
+    alias: mongodb
+  - name: postgresql
+    version: "~16.x"
+    repository: https://charts.bitnami.com/bitnami
+    alias: postgresql
+  - name: vault
+    version: "~0.28.x"
+    repository: https://helm.releases.hashicorp.com
+    alias: vault
+  - name: auth-service
+    version: "0.1.0"
+    repository: "file://./auth-service"
+  - name: project-service
+    version: "0.1.0"
+    repository: "file://./project-service"
+

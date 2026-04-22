@@ -10,6 +10,8 @@ spring:
     authentication-database: ${MONGO_AUTH_DB:admin}
     representation:
       uuid: standard
+    ssl:
+      enabled: { MONGO_SSL_ENABLED:false }
 
 oauth2:
   internal:

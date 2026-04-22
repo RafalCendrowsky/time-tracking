@@ -1,0 +1,47 @@
+replicaCount: 1
+
+image:
+  repository: time-tracking/auth-service
+  tag: latest
+  pullPolicy: IfNotPresent
+
+config:
+  mongoHost: ""
+  mongoPort: "27017"
+  mongoDB: time-tracking
+  mongoAuthDB: admin
+  mongoSslEnabled: "true"
+  vaultUri: ""
+  vaultKvMount: secret
+  vaultSecretPath: auth-service
+  authServerIssuer: ""
+  oauth2RedirectUri: ""
+  oauth2PostLogoutRedirectUri: ""
+  corsAllowedOrigins: ""
+  accessTokenTtl: PT1H
+
+secrets:
+  mongoUser: ""
+  mongoPass: ""
+  vaultToken: ""
+  oauth2ClientId: ""
+
+containerPort: 8443
+
+service:
+  type: ClusterIP
+  port: 443
+
+ingress:
+  enabled: false
+  className: nginx
+  host: auth.time-tracking.local
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+

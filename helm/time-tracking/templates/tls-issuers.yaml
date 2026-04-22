@@ -1,0 +1,66 @@
+{{/*
+  selfSigned mode:  create a bootstrap SelfSigned issuer → CA cert → CA-backed issuer.
+  acme mode:        create an ACME (Let's Encrypt) issuer. Certificates are issued directly
+                    from it — no internal CA is needed.
+  external mode:    the issuer already exists in the cluster; emit nothing here.
+*/}}
+
+{{- if eq .Values.tls.type "selfSigned" }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-selfsigned-issuer
+  namespace: {{ .Release.Namespace }}
+spec:
+  selfSigned: { }
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name }}-ca
+  namespace: {{ .Release.Namespace }}
+spec:
+  isCA: true
+  commonName: {{ .Release.Name }}-ca
+  secretName: {{ .Release.Name }}-ca-tls
+  duration: 87600h   # 10 years
+  renewBefore: 720h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: {{ .Release.Name }}-selfsigned-issuer
+    kind: Issuer
+---
+
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-ca-issuer
+  namespace: {{ .Release.Namespace }}
+spec:
+  ca:
+    secretName: {{ .Release.Name }}-ca-tls
+
+{{- else if eq .Values.tls.type "acme" }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Release.Name }}-ca-issuer
+  namespace: {{ .Release.Namespace }}
+spec:
+  acme:
+    email: {{ required "tls.acme.email is required for acme issuer type" .Values.tls.acme.email }}
+    server: {{ .Values.tls.acme.server }}
+    privateKeySecretRef:
+      name: {{ .Release.Name }}-acme-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: {{ .Values.tls.acme.ingressClass }}
+
+{{- else if eq .Values.tls.type "external" }}
+  # ── External issuer: nothing to create, certificates.yaml will reference it directly ──
+{{- else }}
+  {{- fail (printf "tls.type must be one of: selfSigned, acme, external — got %q" .Values.tls.type) }}
+{{- end }}
