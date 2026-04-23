@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Lightweight script to deploy only the application (auth/project) into an existing cluster
-# - Does NOT install operators or cert-manager
+# - Does NOT install operators, cert-manager, the shared CA chart, or Vault
+# - Expects the shared CA and Vault to already be installed (Vault in the dedicated `vault` namespace)
 # - By default builds & loads local images for the two services; pass --skip-images to skip that
 # - Use --rebuild-images to force rebuild
 

@@ -1,12 +1,9 @@
 dependencies:
-- name: vault
-  repository: https://helm.releases.hashicorp.com
-  version: 0.28.1
 - name: auth-service
   repository: file://./auth-service
   version: 0.1.0
 - name: project-service
   repository: file://./project-service
   version: 0.1.0
-digest: sha256:54174e90d4478d94a81a724a37aa0c596b7d21b9deb6d768caf0e2064e31d7a3
-generated: "2026-04-22T18:33:22.8225913+02:00"
+digest: sha256:36ede5dd9fcd42fdf99b4eef45debd6ce098bcae168daa2a87f5f1fc3b658844
+generated: "2026-04-23T13:48:58.4604251+02:00"

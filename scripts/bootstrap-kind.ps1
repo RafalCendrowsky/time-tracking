@@ -112,6 +112,11 @@ if ( [string]::IsNullOrWhiteSpace($ValuesFile))
 {
     $ValuesFile = Join-Path $ChartPath 'values.yaml'
 }
+$SharedCAChartPath = Join-Path $repoRoot 'helm\shared-ca'
+$SharedCAValuesFile = Join-Path $SharedCAChartPath 'values.yaml'
+$VaultChartPath = Join-Path $repoRoot 'helm\vault'
+$VaultValuesFile = Join-Path $VaultChartPath 'values.yaml'
+$VaultInitKeysFile = Join-Path $PSScriptRoot 'vault-init-keys.json'
 
 Assert-Command -Name 'kind'
 Assert-Command -Name 'kubectl'
@@ -168,9 +173,27 @@ if (-not (Test-Path $ValuesFile))
 {
     throw "Values file '$ValuesFile' does not exist."
 }
+if (-not (Test-Path $SharedCAChartPath))
+{
+    throw "Shared CA chart path '$SharedCAChartPath' does not exist."
+}
+if (-not (Test-Path $SharedCAValuesFile))
+{
+    throw "Shared CA values file '$SharedCAValuesFile' does not exist."
+}
+if (-not (Test-Path $VaultChartPath))
+{
+    throw "Vault chart path '$VaultChartPath' does not exist."
+}
+if (-not (Test-Path $VaultValuesFile))
+{
+    throw "Vault values file '$VaultValuesFile' does not exist."
+}
 
 Write-Host 'Updating chart dependencies'
 Invoke-Checked -Description 'helm dependency update' -ScriptBlock {
+    & helm dependency update $SharedCAChartPath
+    & helm dependency update $VaultChartPath
     & helm dependency update $ChartPath
 }
 
@@ -213,6 +236,68 @@ function Wait-ForCRD
     throw "CRD $crdName not found within $timeoutSec seconds"
 }
 
+function Get-RootToken
+{
+    if (Test-Path $VaultInitKeysFile)
+    {
+        return (Get-Content $VaultInitKeysFile -Raw | ConvertFrom-Json).root_token
+    }
+
+    return $null
+}
+
+function Initialize-VaultKubernetesAuth
+{
+    param([Parameter(Mandatory = $true)][string]$RootToken)
+
+    $vaultPod = "$ReleaseName-vault-0"
+    $policy = @'
+path "secret/data/auth-service/*" {
+  capabilities = ["read"]
+}
+'@
+
+    Write-Host "Configuring Vault Kubernetes auth for role '$ReleaseName-auth-service'"
+
+    Invoke-Checked -Description 'vault auth enable kubernetes' -ScriptBlock {
+        & kubectl exec -n vault $vaultPod -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=$RootToken vault auth enable kubernetes || true"
+    }
+
+    Invoke-Checked -Description 'vault policy write auth-service' -ScriptBlock {
+        $policy | & kubectl exec -i -n vault $vaultPod -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=$RootToken vault policy write auth-service -"
+    }
+
+    Invoke-Checked -Description 'vault kubernetes auth config' -ScriptBlock {
+        & kubectl exec -n vault $vaultPod -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=$RootToken vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443 kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token"
+    }
+
+    Invoke-Checked -Description 'vault kubernetes auth role' -ScriptBlock {
+        & kubectl exec -n vault $vaultPod -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=$RootToken vault write auth/kubernetes/role/$ReleaseName-auth-service bound_service_account_names=$ReleaseName-auth-service bound_service_account_namespaces=$Namespace token_policies=auth-service ttl=1h"
+    }
+}
+
+function Wait-ForSecret
+{
+    param(
+        [Parameter(Mandatory = $true)][string]$NamespaceName,
+        [Parameter(Mandatory = $true)][string]$SecretName,
+        [int]$timeoutSec = 180
+    )
+
+    $end = (Get-Date).AddSeconds($timeoutSec)
+    while ((Get-Date) -lt $end)
+    {
+        & kubectl get secret $SecretName -n $NamespaceName 1> $null 2> $null
+        if ($LASTEXITCODE -eq 0)
+        {
+            Write-Host "Secret $SecretName is present in namespace $NamespaceName"
+            return
+        }
+        Start-Sleep -Seconds 2
+    }
+    throw "Secret $SecretName not found in namespace $NamespaceName within $timeoutSec seconds"
+}
+
 Write-Host 'Waiting for operator CRDs to be established'
 try
 {
@@ -230,6 +315,58 @@ try
 catch
 {
     Write-Warning "mongodbcommunity.mongodbcommunity.mongodb.com not found, trying alternative CRD name"
+}
+
+Write-Host "Creating Vault namespace 'vault' if needed"
+try
+{
+    & kubectl get namespace vault *> $null
+    $vaultNamespaceExists = ($LASTEXITCODE -eq 0)
+}
+catch
+{
+    $vaultNamespaceExists = $false
+}
+
+if (-not $vaultNamespaceExists)
+{
+    Invoke-Checked -Description 'kubectl create namespace vault' -ScriptBlock {
+        & kubectl create namespace vault
+    }
+}
+
+Write-Host "Deploying shared CA release 'shared-ca' into namespace 'cert-manager'"
+Invoke-Checked -Description 'helm upgrade --install shared-ca' -ScriptBlock {
+    & helm upgrade --install shared-ca $SharedCAChartPath `
+        --namespace cert-manager `
+        --create-namespace `
+        --values $SharedCAValuesFile `
+        --history-max 3 `
+        --wait `
+        --timeout 10m
+}
+Wait-ForSecret -NamespaceName 'cert-manager' -SecretName 'time-tracking-shared-ca-tls' -timeoutSec 180
+
+Write-Host "Deploying Vault release '$ReleaseName' into namespace 'vault'"
+Invoke-Checked -Description 'helm upgrade --install vault' -ScriptBlock {
+    & helm upgrade --install $ReleaseName $VaultChartPath `
+        --namespace vault `
+        --create-namespace `
+        --values $VaultValuesFile `
+        --skip-crds `
+        --history-max 3 `
+        --wait `
+        --timeout 15m
+}
+
+$rootToken = Get-RootToken
+if ($rootToken)
+{
+    Initialize-VaultKubernetesAuth -RootToken $rootToken
+}
+else
+{
+    Write-Warning "No '$VaultInitKeysFile' found; skipping Vault Kubernetes auth bootstrap."
 }
 
 Ensure-DockerImage -Image (Get-ImageName 'time-tracking/auth-service:latest') -ContextPath (Join-Path $repoRoot 'services\auth-service')

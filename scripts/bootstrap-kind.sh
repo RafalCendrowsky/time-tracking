@@ -6,8 +6,14 @@ NAMESPACE="time-tracking"
 RELEASE_NAME="time-tracking"
 REGISTRY=""
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHART_PATH="${REPO_ROOT}/helm/time-tracking"
 VALUES_FILE="${CHART_PATH}/values.yaml"
+SHARED_CA_CHART_PATH="${REPO_ROOT}/helm/shared-ca"
+SHARED_CA_VALUES_FILE="${SHARED_CA_CHART_PATH}/values.yaml"
+VAULT_CHART_PATH="${REPO_ROOT}/helm/vault"
+VAULT_VALUES_FILE="${VAULT_CHART_PATH}/values.yaml"
+VAULT_INIT_KEYS_FILE="${SCRIPT_DIR}/vault-init-keys.json"
 REBUILD_IMAGES="false"
 
 usage() {
@@ -161,9 +167,27 @@ if [[ ! -f "$VALUES_FILE" ]]; then
   echo "Values file '$VALUES_FILE' does not exist." >&2
   exit 1
 fi
+if [[ ! -d "$SHARED_CA_CHART_PATH" ]]; then
+  echo "Shared CA chart path '$SHARED_CA_CHART_PATH' does not exist." >&2
+  exit 1
+fi
+if [[ ! -f "$SHARED_CA_VALUES_FILE" ]]; then
+  echo "Shared CA values file '$SHARED_CA_VALUES_FILE' does not exist." >&2
+  exit 1
+fi
+if [[ ! -d "$VAULT_CHART_PATH" ]]; then
+  echo "Vault chart path '$VAULT_CHART_PATH' does not exist." >&2
+  exit 1
+fi
+if [[ ! -f "$VAULT_VALUES_FILE" ]]; then
+  echo "Vault values file '$VAULT_VALUES_FILE' does not exist." >&2
+  exit 1
+fi
 
 echo "Updating chart dependencies"
+run_checked "helm dependency update shared-ca" helm dependency update "$SHARED_CA_CHART_PATH"
 run_checked "helm dependency update" helm dependency update "$CHART_PATH"
+run_checked "helm dependency update vault" helm dependency update "$VAULT_CHART_PATH"
 
 echo "Installing CloudNativePG operator"
 run_checked "helm upgrade --install cnpg-operator" helm upgrade --install cnpg-operator cnpg/cloudnative-pg \
@@ -199,6 +223,45 @@ wait_for_crd() {
   return 1
 }
 
+wait_for_secret() {
+  local namespace="$1"
+  local secret="$2"
+  local timeout_seconds=${3:-180}
+  local end_time=$(( $(date +%s) + timeout_seconds ))
+  while [ $(date +%s) -lt $end_time ]; do
+    if kubectl get secret "$secret" -n "$namespace" >/dev/null 2>&1; then
+      echo "Secret $secret is present in namespace $namespace"
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Timed out waiting for secret $secret in namespace $namespace" >&2
+  return 1
+}
+
+read_root_token() {
+  if [[ -f "$VAULT_INIT_KEYS_FILE" ]]; then
+    sed -n 's/.*"root_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$VAULT_INIT_KEYS_FILE" | head -n 1
+  fi
+}
+
+configure_vault_kubernetes_auth() {
+  local root_token="$1"
+  local vault_pod="${RELEASE_NAME}-vault-0"
+  local role_name="${RELEASE_NAME}-auth-service"
+
+  echo "Configuring Vault Kubernetes auth for role '$role_name'"
+  run_checked "vault auth enable kubernetes" kubectl exec -n vault "$vault_pod" -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=${root_token} vault auth enable kubernetes || true"
+
+  printf '%s
+' 'path "secret/data/auth-service/*" {' '  capabilities = ["read"]' '}' | \
+    run_checked "vault policy write auth-service" kubectl exec -i -n vault "$vault_pod" -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=${root_token} vault policy write auth-service -"
+
+  run_checked "vault kubernetes auth config" kubectl exec -n vault "$vault_pod" -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=${root_token} vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443 kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+  run_checked "vault kubernetes auth role" kubectl exec -n vault "$vault_pod" -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=${root_token} vault write auth/kubernetes/role/${role_name} bound_service_account_names=${role_name} bound_service_account_namespaces=${NAMESPACE} token_policies=auth-service ttl=1h"
+}
+
 echo "Waiting for operator CRDs to be established"
 if ! wait_for_crd "clusters.postgresql.cnpg.io" 120; then
   echo "clusters.postgresql.cnpg.io not found, attempting alternative name" >&2
@@ -207,6 +270,38 @@ fi
 
 if ! wait_for_crd "mongodbcommunity.mongodbcommunity.mongodb.com" 120; then
   echo "mongodbcommunity.mongodbcommunity.mongodb.com not found after timeout" >&2
+fi
+
+echo "Creating Vault namespace 'vault' if needed"
+if ! kubectl get namespace vault >/dev/null 2>&1; then
+  run_checked "kubectl create namespace vault" kubectl create namespace vault
+fi
+
+echo "Deploying shared CA release 'shared-ca' into namespace 'cert-manager'"
+run_checked "helm upgrade --install shared-ca" helm upgrade --install shared-ca "$SHARED_CA_CHART_PATH" \
+  --namespace cert-manager \
+  --create-namespace \
+  --values "$SHARED_CA_VALUES_FILE" \
+  --history-max 3 \
+  --wait \
+  --timeout 10m
+wait_for_secret cert-manager time-tracking-shared-ca-tls 180
+
+echo "Deploying Vault release '$RELEASE_NAME' into namespace 'vault'"
+run_checked "helm upgrade --install vault" helm upgrade --install "$RELEASE_NAME" "$VAULT_CHART_PATH" \
+  --namespace vault \
+  --create-namespace \
+  --values "$VAULT_VALUES_FILE" \
+  --skip-crds \
+  --history-max 3 \
+  --wait \
+  --timeout 15m
+
+root_token="$(read_root_token || true)"
+if [[ -n "$root_token" ]]; then
+  configure_vault_kubernetes_auth "$root_token"
+else
+  echo "No ${VAULT_INIT_KEYS_FILE} found; skipping Vault Kubernetes auth bootstrap" >&2
 fi
 
 ensure_image "$(image_name 'time-tracking/auth-service:latest')" "${REPO_ROOT}/services/auth-service"

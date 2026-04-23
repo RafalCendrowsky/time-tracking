@@ -1,0 +1,13 @@
+apiVersion: v2
+name: vault
+description: Dedicated Vault chart for the time-tracking platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+dependencies:
+  - name: vault
+    version: "~0.28.x"
+    repository: https://helm.releases.hashicorp.com
+    alias: vault
+

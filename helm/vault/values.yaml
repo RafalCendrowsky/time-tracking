@@ -1,0 +1,55 @@
+tls:
+  external:
+    name: time-tracking-shared-ca-issuer
+    kind: ClusterIssuer
+
+vault:
+  global:
+    tlsDisable: false
+  server:
+    dev:
+      enabled: false
+    standalone:
+      enabled: true
+      config: |
+        ui = true
+
+        listener "tcp" {
+          address       = "[::]:8200"
+          tls_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file  = "/vault/userconfig/vault-tls/tls.key"
+        }
+
+        storage "raft" {
+          path    = "/vault/data"
+          node_id = "vault-0"
+        }
+    volumes:
+      - name: vault-tls
+        secret:
+          secretName: time-tracking-vault-tls
+    volumeMounts:
+      - name: vault-tls
+        mountPath: /vault/userconfig/vault-tls
+        readOnly: true
+    dataStorage:
+      enabled: true
+      size: 1Gi
+    readinessProbe:
+      enabled: true
+      path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+    livenessProbe:
+      enabled: true
+      path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
+  injector:
+    enabled: true
+    leaderElector:
+      enabled: false
+    certs:
+      secretName: time-tracking-vault-agent-injector-tls
+      certFilename: tls.crt
+      keyFilename: tls.key
+    webhook:
+      annotations:
+        cert-manager.io/inject-ca-from: "{{ .Release.Namespace }}/{{ .Release.Name }}-vault-agent-injector-certificate"
+

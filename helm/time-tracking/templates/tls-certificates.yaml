@@ -1,34 +1,7 @@
 {{- $ns  := .Release.Namespace }}
 {{- $rel := .Release.Name }}
-{{/*
-  Resolve which issuer all certificates should reference.
-  - selfSigned / acme: use the local Issuer created in tls-issuers.yaml
-  - external:          use the name/kind supplied by the operator
-*/}}
-{{- $issuerName := printf "%s-ca-issuer" $rel }}
-{{- $issuerKind := "Issuer" }}
-{{- if eq .Values.tls.type "external" }}
-  {{- $issuerName = required "tls.external.name is required for external issuer type" .Values.tls.external.name }}
-  {{- $issuerKind = .Values.tls.external.kind | default "ClusterIssuer" }}
-{{- end }}
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: {{ $rel }}-vault-tls
-  namespace: {{ $ns }}
-spec:
-  secretName: {{ $rel }}-vault-tls
-  duration: 8760h
-  renewBefore: 720h
-  commonName: {{ $rel }}-vault
-  dnsNames:
-    - {{ $rel }}-vault
-    - {{ $rel }}-vault.{{ $ns }}.svc.cluster.local
-  issuerRef:
-    name: {{ $issuerName }}
-    kind: {{ $issuerKind }}
----
+{{- $issuerName := required "tls.external.name is required for external issuer" .Values.tls.external.name }}
+{{- $issuerKind := .Values.tls.external.kind | default "ClusterIssuer" }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -77,23 +50,6 @@ spec:
   dnsNames:
     - {{ $rel }}-project-service
     - {{ $rel }}-project-service.{{ $ns }}.svc.cluster.local
-  issuerRef:
-    name: {{ $issuerName }}
-    kind: {{ $issuerKind }}
----
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: {{ $rel }}-vault-agent-injector-certificate
-  namespace: {{ $ns }}
-spec:
-  secretName: {{ $rel }}-vault-agent-injector-tls
-  duration: 8760h
-  renewBefore: 720h
-  dnsNames:
-    - {{ $rel }}-vault-agent-injector-svc
-    - {{ $rel }}-vault-agent-injector-svc.{{ $ns }}.svc
-    - {{ $rel }}-vault-agent-injector-svc.{{ $ns }}.svc.cluster.local
   issuerRef:
     name: {{ $issuerName }}
     kind: {{ $issuerKind }}

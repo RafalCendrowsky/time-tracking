@@ -11,7 +11,8 @@ param(
 )
 
 # Small convenience script to deploy only the application (auth/project) into an existing cluster
-# - Does NOT install operators or cert-manager
+# - Does NOT install operators, cert-manager, the shared CA chart, or Vault
+# - Expects the shared CA and Vault to already be installed (Vault in the dedicated `vault` namespace)
 # - By default will build & load local images for the two services; pass -SkipImages to skip that
 # - Use -BuildImages to force rebuild even if images exist locally
 

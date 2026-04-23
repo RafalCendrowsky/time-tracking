@@ -4,13 +4,24 @@
 
 ```
 helm/
-└── time-tracking/          ← umbrella chart
-    ├── Chart.yaml          ← dependencies: mongodb, postgresql, vault, auth-service, project-service
-    ├── values.yaml         ← all overrides in one place
+├── shared-ca/               ← dedicated shared CA / ClusterIssuer chart
+│   ├── Chart.yaml
+│   ├── values.yaml
+│   └── templates/
+│       └── shared-ca.yaml
+├── time-tracking/          ← umbrella app chart
+│   ├── Chart.yaml          ← dependencies: mongodb, postgresql, auth-service, project-service
+│   ├── values.yaml         ← app-level overrides in one place
+│   ├── templates/
+│   │   └── _helpers.tpl
+│   ├── auth-service/       ← first-party sub-chart
+│   └── project-service/    ← first-party sub-chart
+└── vault/                  ← dedicated Vault release (namespace: vault)
+    ├── Chart.yaml          ← dependency: hashicorp/vault
+    ├── values.yaml         ← Vault-specific overrides
     ├── templates/
-    │   └── _helpers.tpl
-    ├── auth-service/       ← first-party sub-chart
-    └── project-service/    ← first-party sub-chart
+    │   ├── tls-certificates.yaml
+    │   └── tls-issuers.yaml
 ```
 
 ## Prerequisites
@@ -39,8 +50,17 @@ The scripts use these defaults:
 
 - kind cluster: `time-tracking-kind`
 - namespace / Helm release: `time-tracking`
+- Vault namespace: `vault`
+- shared CA release: `shared-ca` in namespace `cert-manager`
 - chart: `helm/time-tracking`
 - values file: `helm/time-tracking/values.yaml`
+
+Install order:
+
+1. `cert-manager`
+2. `shared-ca` (creates the shared CA and `ClusterIssuer`)
+3. `vault`
+4. `time-tracking`
 
 ## Service DNS names inside the cluster
 
@@ -48,6 +68,6 @@ The scripts use these defaults:
 |-----------------|---------------------------------|-------|
 | MongoDB         | `time-tracking-mongodb`         | 27017 |
 | PostgreSQL      | `time-tracking-postgresql`      | 5432  |
-| Vault           | `time-tracking-vault`           | 8200  |
+| Vault           | `time-tracking-vault.vault`     | 8200  |
 | auth-service    | `time-tracking-auth-service`    | 443   |
 | project-service | `time-tracking-project-service` | 443   |

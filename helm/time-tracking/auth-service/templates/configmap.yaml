@@ -11,6 +11,7 @@ data:
   MONGO_AUTH_DB: {{ .Values.config.mongoAuthDB | quote }}
   MONGO_SSL_ENABLED: {{ .Values.config.mongoSslEnabled | default "false" | quote }}
   VAULT_URI: {{ .Values.config.vaultUri | quote }}
+  VAULT_ROLE: {{ printf "%s-auth-service" .Release.Name | quote }}
   VAULT_KV_MOUNT: {{ .Values.config.vaultKvMount | quote }}
   VAULT_SECRET_PATH: {{ .Values.config.vaultSecretPath | quote }}
   AUTH_SERVER_ISSUER: {{ .Values.config.authServerIssuer | quote }}

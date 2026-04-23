@@ -1,0 +1,39 @@
+{{- $ns  := .Release.Namespace }}
+{{- $rel := .Release.Name }}
+{{- $issuerName := required "tls.external.name is required for external issuer" .Values.tls.external.name }}
+{{- $issuerKind := .Values.tls.external.kind | default "ClusterIssuer" }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $rel }}-vault-tls
+  namespace: {{ $ns }}
+spec:
+  secretName: {{ $rel }}-vault-tls
+  duration: 8760h
+  renewBefore: 720h
+  commonName: {{ $rel }}-vault
+  dnsNames:
+    - {{ $rel }}-vault
+    - {{ $rel }}-vault.{{ $ns }}.svc.cluster.local
+  issuerRef:
+    name: {{ $issuerName }}
+    kind: {{ $issuerKind }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $rel }}-vault-agent-injector-certificate
+  namespace: {{ $ns }}
+spec:
+  secretName: {{ $rel }}-vault-agent-injector-tls
+  duration: 8760h
+  renewBefore: 720h
+  dnsNames:
+    - {{ $rel }}-vault-agent-injector-svc
+    - {{ $rel }}-vault-agent-injector-svc.{{ $ns }}.svc
+    - {{ $rel }}-vault-agent-injector-svc.{{ $ns }}.svc.cluster.local
+  issuerRef:
+    name: {{ $issuerName }}
+    kind: {{ $issuerKind }}
+

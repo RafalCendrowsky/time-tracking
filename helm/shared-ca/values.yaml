@@ -1,0 +1,10 @@
+ca:
+  bootstrapIssuerName: time-tracking-shared-ca-bootstrap
+  certificateName: time-tracking-shared-ca
+  secretName: time-tracking-shared-ca-tls
+  commonName: time-tracking-shared-ca
+
+issuer:
+  name: time-tracking-shared-ca-issuer
+  kind: ClusterIssuer
+
