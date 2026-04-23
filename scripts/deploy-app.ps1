@@ -57,6 +57,8 @@ Assert-Command kind; Assert-Command kubectl; Assert-Command helm; Assert-Command
 if (-not (Test-Path $ChartPath)) { throw "Helm chart path '$ChartPath' does not exist." }
 if (-not (Test-Path $ValuesFile)) { throw "Values file '$ValuesFile' does not exist." }
 
+$SecretsFile = Join-Path (Split-Path $ValuesFile) 'secrets.yaml'
+
 # Build/load images for local services unless user asked to skip
 if (-not $SkipImages) {
     Ensure-DockerImage -Image (Get-ImageName 'time-tracking/auth-service:latest') -ContextPath (Join-Path $repoRoot 'services\auth-service')
@@ -76,14 +78,27 @@ $helmArgs = @(
     '--create-namespace',
     '--values',$ValuesFile,
     '--skip-crds',
-    '--history-max','3',
-    '--wait',
-    '--timeout','15m'
+    '--history-max','3'
 )
+
+if (Test-Path $SecretsFile) {
+    Write-Host "Applying secrets override from $SecretsFile"
+    $helmArgs += @('--values', $SecretsFile)
+}
 
 Write-Host "Deploying application release '$ReleaseName' (skip CRDs)"
 & helm @helmArgs
 if ($LASTEXITCODE -ne 0) { throw 'helm upgrade/install failed' }
+
+foreach ($deploymentName in @("$ReleaseName-auth-service", "$ReleaseName-project-service")) {
+    Write-Host "Restarting deployment $deploymentName"
+    & kubectl rollout restart "deployment/$deploymentName" -n $Namespace
+    if ($LASTEXITCODE -ne 0) { throw "kubectl rollout restart failed for $deploymentName" }
+
+    Write-Host "Waiting for rollout of $deploymentName"
+    & kubectl rollout status "deployment/$deploymentName" -n $Namespace --timeout=5m
+    if ($LASTEXITCODE -ne 0) { throw "kubectl rollout status failed for $deploymentName" }
+}
 
 Write-Host 'Application deployment complete.'
 Write-Host "Run: kubectl -n $Namespace get pods"

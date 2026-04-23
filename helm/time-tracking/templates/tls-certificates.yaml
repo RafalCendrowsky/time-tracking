@@ -53,3 +53,20 @@ spec:
   issuerRef:
     name: {{ $issuerName }}
     kind: {{ $issuerKind }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $rel }}-postgresql-tls
+  namespace: {{ $ns }}
+spec:
+  secretName: {{ $rel }}-postgresql-tls
+  duration: 8760h
+  renewBefore: 720h
+  commonName: {{ $rel }}-postgresql-rw
+  dnsNames:
+    - {{ $rel }}-postgresql-rw
+    - {{ $rel }}-postgresql-rw.{{ $ns }}.svc.cluster.local
+  issuerRef:
+    name: {{ $issuerName }}
+    kind: {{ $issuerKind }}

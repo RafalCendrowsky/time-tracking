@@ -6,7 +6,7 @@ param(
     [string]$ChartPath = '',
     [string]$ValuesFile = '',
     [string]$Registry = '',
-    [switch]$RebuildImages
+    [switch]$BuildImages
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,7 +69,7 @@ function Ensure-DockerImage
         [Parameter(Mandatory = $true)][string]$ContextPath
     )
 
-    if ($RebuildImages -or -not (Test-DockerImageExists -Image $Image))
+    if ($BuildImages -or -not (Test-DockerImageExists -Image $Image))
     {
         Write-Host "Building $Image from $ContextPath"
         Invoke-Checked -Description "docker build for $Image" -ScriptBlock {
@@ -246,58 +246,6 @@ function Get-RootToken
     return $null
 }
 
-function Initialize-VaultKubernetesAuth
-{
-    param([Parameter(Mandatory = $true)][string]$RootToken)
-
-    $vaultPod = "$ReleaseName-vault-0"
-    $policy = @'
-path "secret/data/auth-service/*" {
-  capabilities = ["read"]
-}
-'@
-
-    Write-Host "Configuring Vault Kubernetes auth for role '$ReleaseName-auth-service'"
-
-    Invoke-Checked -Description 'vault auth enable kubernetes' -ScriptBlock {
-        & kubectl exec -n vault $vaultPod -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=$RootToken vault auth enable kubernetes || true"
-    }
-
-    Invoke-Checked -Description 'vault policy write auth-service' -ScriptBlock {
-        $policy | & kubectl exec -i -n vault $vaultPod -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=$RootToken vault policy write auth-service -"
-    }
-
-    Invoke-Checked -Description 'vault kubernetes auth config' -ScriptBlock {
-        & kubectl exec -n vault $vaultPod -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=$RootToken vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443 kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token"
-    }
-
-    Invoke-Checked -Description 'vault kubernetes auth role' -ScriptBlock {
-        & kubectl exec -n vault $vaultPod -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=$RootToken vault write auth/kubernetes/role/$ReleaseName-auth-service bound_service_account_names=$ReleaseName-auth-service bound_service_account_namespaces=$Namespace token_policies=auth-service ttl=1h"
-    }
-}
-
-function Wait-ForSecret
-{
-    param(
-        [Parameter(Mandatory = $true)][string]$NamespaceName,
-        [Parameter(Mandatory = $true)][string]$SecretName,
-        [int]$timeoutSec = 180
-    )
-
-    $end = (Get-Date).AddSeconds($timeoutSec)
-    while ((Get-Date) -lt $end)
-    {
-        & kubectl get secret $SecretName -n $NamespaceName 1> $null 2> $null
-        if ($LASTEXITCODE -eq 0)
-        {
-            Write-Host "Secret $SecretName is present in namespace $NamespaceName"
-            return
-        }
-        Start-Sleep -Seconds 2
-    }
-    throw "Secret $SecretName not found in namespace $NamespaceName within $timeoutSec seconds"
-}
-
 Write-Host 'Waiting for operator CRDs to be established'
 try
 {
@@ -345,7 +293,6 @@ Invoke-Checked -Description 'helm upgrade --install shared-ca' -ScriptBlock {
         --wait `
         --timeout 10m
 }
-Wait-ForSecret -NamespaceName 'cert-manager' -SecretName 'time-tracking-shared-ca-tls' -timeoutSec 180
 
 Write-Host "Deploying Vault release '$ReleaseName' into namespace 'vault'"
 Invoke-Checked -Description 'helm upgrade --install vault' -ScriptBlock {
@@ -357,16 +304,6 @@ Invoke-Checked -Description 'helm upgrade --install vault' -ScriptBlock {
         --history-max 3 `
         --wait `
         --timeout 15m
-}
-
-$rootToken = Get-RootToken
-if ($rootToken)
-{
-    Initialize-VaultKubernetesAuth -RootToken $rootToken
-}
-else
-{
-    Write-Warning "No '$VaultInitKeysFile' found; skipping Vault Kubernetes auth bootstrap."
 }
 
 Ensure-DockerImage -Image (Get-ImageName 'time-tracking/auth-service:latest') -ContextPath (Join-Path $repoRoot 'services\auth-service')
@@ -400,9 +337,7 @@ Invoke-Checked -Description 'helm upgrade --install time-tracking' -ScriptBlock 
         '--create-namespace',
         '--values', $ValuesFile,
         '--skip-crds',
-        '--history-max', '3',
-        '--wait',
-        '--timeout', '15m'
+        '--history-max', '3'
     )
     if (Test-Path $secretsFile)
     {

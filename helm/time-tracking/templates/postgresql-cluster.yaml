@@ -6,6 +6,10 @@ metadata:
 spec:
   instances: 1
 
+  certificates:
+    serverTLSSecret: {{ .Release.Name }}-postgresql-tls
+    serverCASecret: {{ .Release.Name }}-postgresql-tls
+
   bootstrap:
     initdb:
       database: {{ .Values.postgresql.database }}

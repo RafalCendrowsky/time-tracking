@@ -14,7 +14,7 @@ SHARED_CA_VALUES_FILE="${SHARED_CA_CHART_PATH}/values.yaml"
 VAULT_CHART_PATH="${REPO_ROOT}/helm/vault"
 VAULT_VALUES_FILE="${VAULT_CHART_PATH}/values.yaml"
 VAULT_INIT_KEYS_FILE="${SCRIPT_DIR}/vault-init-keys.json"
-REBUILD_IMAGES="false"
+BUILD_IMAGES="false"
 
 usage() {
   cat <<'EOF'
@@ -27,7 +27,7 @@ Options:
   --registry NAME       Image registry prefix (default: empty)
   --chart-path PATH     Helm chart path (default: helm/time-tracking)
   --values-file PATH    Helm values file (default: helm/time-tracking/values.yaml)
-  --rebuild-images      Force rebuild auth/project images before loading into kind
+  --build-images        Force rebuild auth/project images before loading into kind
   -h, --help            Show this help
 EOF
 }
@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --rebuild-images)
-      REBUILD_IMAGES="true"
+      BUILD_IMAGES="true"
       shift
       ;;
     -h|--help)
@@ -98,7 +98,7 @@ ensure_image() {
   local image="$1"
   local context_path="$2"
 
-  if [[ "$REBUILD_IMAGES" == "true" ]] || ! image_exists "$image"; then
+  if [[ "$BUILD_IMAGES" == "true" ]] || ! image_exists "$image"; then
     echo "Building $image from $context_path"
     run_checked "docker build for $image" docker build -t "$image" "$context_path"
   else
@@ -223,44 +223,6 @@ wait_for_crd() {
   return 1
 }
 
-wait_for_secret() {
-  local namespace="$1"
-  local secret="$2"
-  local timeout_seconds=${3:-180}
-  local end_time=$(( $(date +%s) + timeout_seconds ))
-  while [ $(date +%s) -lt $end_time ]; do
-    if kubectl get secret "$secret" -n "$namespace" >/dev/null 2>&1; then
-      echo "Secret $secret is present in namespace $namespace"
-      return 0
-    fi
-    sleep 2
-  done
-  echo "Timed out waiting for secret $secret in namespace $namespace" >&2
-  return 1
-}
-
-read_root_token() {
-  if [[ -f "$VAULT_INIT_KEYS_FILE" ]]; then
-    sed -n 's/.*"root_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$VAULT_INIT_KEYS_FILE" | head -n 1
-  fi
-}
-
-configure_vault_kubernetes_auth() {
-  local root_token="$1"
-  local vault_pod="${RELEASE_NAME}-vault-0"
-  local role_name="${RELEASE_NAME}-auth-service"
-
-  echo "Configuring Vault Kubernetes auth for role '$role_name'"
-  run_checked "vault auth enable kubernetes" kubectl exec -n vault "$vault_pod" -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=${root_token} vault auth enable kubernetes || true"
-
-  printf '%s
-' 'path "secret/data/auth-service/*" {' '  capabilities = ["read"]' '}' | \
-    run_checked "vault policy write auth-service" kubectl exec -i -n vault "$vault_pod" -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=${root_token} vault policy write auth-service -"
-
-  run_checked "vault kubernetes auth config" kubectl exec -n vault "$vault_pod" -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=${root_token} vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443 kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token"
-
-  run_checked "vault kubernetes auth role" kubectl exec -n vault "$vault_pod" -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_TOKEN=${root_token} vault write auth/kubernetes/role/${role_name} bound_service_account_names=${role_name} bound_service_account_namespaces=${NAMESPACE} token_policies=auth-service ttl=1h"
-}
 
 echo "Waiting for operator CRDs to be established"
 if ! wait_for_crd "clusters.postgresql.cnpg.io" 120; then
@@ -285,7 +247,6 @@ run_checked "helm upgrade --install shared-ca" helm upgrade --install shared-ca 
   --history-max 3 \
   --wait \
   --timeout 10m
-wait_for_secret cert-manager time-tracking-shared-ca-tls 180
 
 echo "Deploying Vault release '$RELEASE_NAME' into namespace 'vault'"
 run_checked "helm upgrade --install vault" helm upgrade --install "$RELEASE_NAME" "$VAULT_CHART_PATH" \
@@ -296,13 +257,6 @@ run_checked "helm upgrade --install vault" helm upgrade --install "$RELEASE_NAME
   --history-max 3 \
   --wait \
   --timeout 15m
-
-root_token="$(read_root_token || true)"
-if [[ -n "$root_token" ]]; then
-  configure_vault_kubernetes_auth "$root_token"
-else
-  echo "No ${VAULT_INIT_KEYS_FILE} found; skipping Vault Kubernetes auth bootstrap" >&2
-fi
 
 ensure_image "$(image_name 'time-tracking/auth-service:latest')" "${REPO_ROOT}/services/auth-service"
 ensure_image "$(image_name 'time-tracking/project-service:latest')" "${REPO_ROOT}/services/project-service"
@@ -322,8 +276,6 @@ helm_args=(
   --values "$VALUES_FILE"
   --skip-crds
   --history-max 3
-  --wait
-  --timeout 15m
 )
 if [[ -f "$SECRETS_FILE" ]]; then
   echo "Applying secrets override from $SECRETS_FILE"

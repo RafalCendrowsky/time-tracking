@@ -63,6 +63,8 @@ ensure_image(){ local image="$1"; local context_path="$2";
 if [[ ! -d "$CHART_PATH" ]]; then echo "Chart path $CHART_PATH not found" >&2; exit 1; fi
 if [[ ! -f "$VALUES_FILE" ]]; then echo "Values file $VALUES_FILE not found" >&2; exit 1; fi
 
+SECRETS_FILE="$(dirname "$VALUES_FILE")/secrets.yaml"
+
 if [[ "$SKIP_IMAGES" != "true" ]]; then
   ensure_image "$(image_name 'time-tracking/auth-service:latest')" "${REPO_ROOT}/services/auth-service"
   ensure_image "$(image_name 'time-tracking/project-service:latest')" "${REPO_ROOT}/services/project-service"
@@ -75,14 +77,27 @@ if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
 fi
 
 # Deploy umbrella chart but skip CRDs (operators must already be installed)
-helm upgrade --install "$RELEASE_NAME" "$CHART_PATH" \
-  --namespace "$NAMESPACE" \
-  --create-namespace \
-  --values "$VALUES_FILE" \
-  --skip-crds \
-  --history-max 3 \
-  --wait \
-  --timeout 15m
+helm_args=(
+  upgrade --install "$RELEASE_NAME" "$CHART_PATH"
+  --namespace "$NAMESPACE"
+  --create-namespace
+  --values "$VALUES_FILE"
+  --skip-crds
+  --history-max 3
+)
+
+if [[ -f "$SECRETS_FILE" ]]; then
+  echo "Applying secrets override from $SECRETS_FILE"
+  helm_args+=(--values "$SECRETS_FILE")
+fi
+
+helm "${helm_args[@]}"
+
+for deployment in "${RELEASE_NAME}-auth-service" "${RELEASE_NAME}-project-service"; do
+  echo "Restarting deployment ${deployment}"
+  kubectl rollout restart "deployment/${deployment}" -n "$NAMESPACE"
+  kubectl rollout status "deployment/${deployment}" -n "$NAMESPACE" --timeout=5m
+done
 
 echo "Application deployment complete."
 echo "kubectl -n $NAMESPACE get pods"

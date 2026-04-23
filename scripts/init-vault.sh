@@ -11,6 +11,7 @@
 #   --key-threshold N        Unseal threshold   (default: 3)
 #   --output-file PATH       Where to save init JSON (default: <script-dir>/vault-init.json)
 #   --unseal-keys-file PATH  Existing init JSON to read unseal keys from
+#   --client-secret VALUE    OAuth2 client secret to seed if missing
 #   --timeout N              Seconds to wait for pod ready (default: 180)
 #   -h, --help               Show this help
 #
@@ -20,10 +21,13 @@ set -euo pipefail
 
 RELEASE_NAME="time-tracking"
 VAULT_NAMESPACE="vault"
+APP_RELEASE_NAME="time-tracking"
+APP_NAMESPACE="time-tracking"
 KEY_SHARES=5
 KEY_THRESHOLD=3
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_FILE="${SCRIPT_DIR}/vault-init-keys.json"
+CLIENT_SECRET=""
 UNSEAL_KEYS_FILE=""
 TIMEOUT_SEC=180
 
@@ -37,10 +41,13 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --release-name)    RELEASE_NAME="$2";    shift 2 ;;
     --namespace)       VAULT_NAMESPACE="$2"; shift 2 ;;
+    --app-release-name) APP_RELEASE_NAME="$2"; shift 2 ;;
+    --app-namespace)    APP_NAMESPACE="$2";    shift 2 ;;
     --key-shares)      KEY_SHARES="$2";      shift 2 ;;
     --key-threshold)   KEY_THRESHOLD="$2";   shift 2 ;;
     --output-file)     OUTPUT_FILE="$2";     shift 2 ;;
     --unseal-keys-file) UNSEAL_KEYS_FILE="$2"; shift 2 ;;
+    --client-secret)   CLIENT_SECRET="$2";   shift 2 ;;
     --timeout)         TIMEOUT_SEC="$2";     shift 2 ;;
     -h|--help)         usage ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -55,6 +62,13 @@ require_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "Required command '$1'
 
 vault_exec() {
   kubectl exec -n "$VAULT_NAMESPACE" "$POD_NAME" \
+    -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_SKIP_VERIFY=true $*"
+}
+
+vault_exec_with_input() {
+  local input_text="$1"
+  shift
+  printf '%s' "$input_text" | kubectl exec -i -n "$VAULT_NAMESPACE" "$POD_NAME" \
     -- sh -c "VAULT_ADDR=https://127.0.0.1:8200 VAULT_SKIP_VERIFY=true $*"
 }
 
@@ -99,8 +113,152 @@ wait_for_pod() {
   exit 1
 }
 
+configure_vault_kubernetes_auth() {
+  local root_token="$1"
+  local role_name="${APP_RELEASE_NAME}-auth-service"
+  local policy_name="auth-service"
+  local policy=$'path "secret/data/auth-service/*" {\n  capabilities = ["read"]\n}\n\npath "secret/metadata/auth-service/*" {\n  capabilities = ["list"]\n}\n'
+
+  echo "Configuring Vault Kubernetes auth for role '${role_name}'"
+
+  vault_exec "VAULT_TOKEN=${root_token} vault auth enable kubernetes || true" >/dev/null
+  vault_exec_with_input "$policy" "VAULT_TOKEN=${root_token} vault policy write ${policy_name} -" >/dev/null
+  vault_exec "VAULT_TOKEN=${root_token} vault write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443 kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt token_reviewer_jwt=@/var/run/secrets/kubernetes.io/serviceaccount/token" >/dev/null
+  vault_exec "VAULT_TOKEN=${root_token} vault write auth/kubernetes/role/${role_name} bound_service_account_names=${role_name} bound_service_account_namespaces=${APP_NAMESPACE} token_policies=${policy_name} ttl=1h" >/dev/null
+}
+
+seed_auth_service_rsa_jwk() {
+  local root_token="$1"
+  local vault_path="secret/auth-service/jwt-rsa-key"
+
+  if vault_exec "VAULT_TOKEN=${root_token} vault kv metadata get -format=json ${vault_path}" \
+    | python3 -c 'import json,sys; doc=json.load(sys.stdin); data=doc.get("data", {}); current=str(data.get("current_version", "")); versions=data.get("versions", {}); entry=versions.get(current, {}); sys.exit(0 if current and not entry.get("deletion_time") and not entry.get("destroyed") else 1)'; then
+    echo "Auth service RSA JWK already exists and is active in Vault at '${vault_path}'."
+    return 0
+  fi
+
+  echo "Seeding auth service RSA JWK in Vault at '${vault_path}'..."
+  local jwk_json
+  jwk_json="$(generate_auth_service_rsa_jwk_json)"
+  vault_exec_with_input "$jwk_json" "VAULT_TOKEN=${root_token} vault kv put ${vault_path} value=\$(cat)" >/dev/null
+  echo "Auth service RSA JWK seeded successfully."
+}
+
+generate_auth_service_rsa_jwk_json() {
+  require_cmd openssl
+  python3 - <<'PY'
+import base64
+import json
+import os
+import re
+import subprocess
+import tempfile
+import uuid
+
+def b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+def parse_openssl_text(text: str):
+    sections = {}
+    current = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line in {"modulus:", "privateExponent:", "prime1:", "prime2:", "exponent1:", "exponent2:", "coefficient:"}:
+            current = line[:-1]
+            sections[current] = []
+            continue
+        m = re.match(r"^publicExponent:\s+(\d+)", line)
+        if m:
+            sections["publicExponent"] = int(m.group(1))
+            current = None
+            continue
+        if current and re.fullmatch(r"[0-9A-Fa-f: ]+", line):
+            sections[current].append(line)
+            continue
+        current = None
+    return sections
+
+tmp = tempfile.NamedTemporaryFile(delete=False)
+tmp.close()
+try:
+    subprocess.run(["openssl", "genrsa", "-out", tmp.name, "2048"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.run(["openssl", "rsa", "-in", tmp.name, "-text", "-noout"], check=True, capture_output=True, text=True)
+    sections = parse_openssl_text(proc.stdout + "\n" + proc.stderr)
+
+    required = ["modulus", "privateExponent", "prime1", "prime2", "exponent1", "exponent2", "coefficient", "publicExponent"]
+    missing = [name for name in required if name not in sections]
+    if missing:
+        raise SystemExit(f"Failed to parse RSA key components from openssl output: {', '.join(missing)}")
+
+    def hex_bytes(name: str) -> bytes:
+        return bytes.fromhex("".join(sections[name]).replace(":", "").replace(" ", ""))
+
+    public_exponent = sections["publicExponent"]
+    exponent_bytes = public_exponent.to_bytes((public_exponent.bit_length() + 7) // 8 or 1, "big")
+
+    jwk = {
+        "kty": "RSA",
+        "use": "sig",
+        "alg": "RS256",
+        "kid": uuid.uuid4().hex,
+        "n": b64url(hex_bytes("modulus")),
+        "e": b64url(exponent_bytes),
+        "d": b64url(hex_bytes("privateExponent")),
+        "p": b64url(hex_bytes("prime1")),
+        "q": b64url(hex_bytes("prime2")),
+        "dp": b64url(hex_bytes("exponent1")),
+        "dq": b64url(hex_bytes("exponent2")),
+        "qi": b64url(hex_bytes("coefficient")),
+    }
+
+    print(json.dumps(jwk, separators=(",", ":")))
+finally:
+    try:
+        os.unlink(tmp.name)
+    except FileNotFoundError:
+        pass
+PY
+}
+
+seed_auth_service_client_secret() {
+  local root_token="$1"
+  local client_secret="$2"
+  local vault_path="secret/auth-service/oauth2-client-secret"
+
+  if vault_exec "VAULT_TOKEN=${root_token} vault kv metadata get -format=json ${vault_path}" \
+    | python3 -c 'import json,sys; doc=json.load(sys.stdin); data=doc.get("data", {}); current=str(data.get("current_version", "")); versions=data.get("versions", {}); entry=versions.get(current, {}); sys.exit(0 if current and not entry.get("deletion_time") and not entry.get("destroyed") else 1)'; then
+    echo "OAuth2 client secret already exists and is active in Vault at '${vault_path}'."
+    return 0
+  fi
+
+  if [[ -z "$client_secret" ]]; then
+    echo "OAuth2 client secret is missing from Vault at '${vault_path}', but no --client-secret value was provided; skipping seed." >&2
+    return 0
+  fi
+
+  echo "Seeding OAuth2 client secret in Vault at '${vault_path}'..."
+  vault_exec "VAULT_TOKEN=${root_token} vault kv put ${vault_path} value=${client_secret}" >/dev/null
+  echo "OAuth2 client secret seeded successfully."
+}
+
+ensure_secret_kv_mount() {
+  local root_token="$1"
+
+  if vault_exec "VAULT_TOKEN=${root_token} vault secrets list -detailed -format=json" | python3 -c 'import json,sys; mounts=json.load(sys.stdin); sys.exit(0 if "secret/" in mounts and mounts["secret/"].get("type") == "kv" and mounts["secret/"].get("options", {}).get("version") == "2" else 1)'; then
+    echo "KV v2 mount 'secret/' already exists."
+    return 0
+  fi
+
+  echo "Enabling KV v2 mount at 'secret/'..."
+  vault_exec "VAULT_TOKEN=${root_token} vault secrets enable -path=secret kv-v2" >/dev/null
+}
+
 
 require_cmd kubectl
+require_cmd python3
+
 
 
 wait_for_pod
@@ -191,6 +349,15 @@ else
   exit 1
 fi
 
+if [[ -n "$ROOT_TOKEN" ]]; then
+  ensure_secret_kv_mount "$ROOT_TOKEN"
+  seed_auth_service_rsa_jwk "$ROOT_TOKEN"
+  seed_auth_service_client_secret "$ROOT_TOKEN" "$CLIENT_SECRET"
+  configure_vault_kubernetes_auth "$ROOT_TOKEN"
+else
+  echo "No root token available; skipping Vault Kubernetes auth bootstrap." >&2
+fi
+
 
 echo ""
 echo " Vault init/unseal complete"
@@ -204,5 +371,6 @@ echo ""
 echo "Useful follow-up commands:"
 echo "  kubectl -n ${VAULT_NAMESPACE} exec ${POD_NAME} -- sh -c 'VAULT_ADDR=https://127.0.0.1:8200 VAULT_SKIP_VERIFY=true VAULT_TOKEN=<root-token> vault status'"
 echo "  kubectl -n ${VAULT_NAMESPACE} port-forward svc/${RELEASE_NAME}-vault 8200:8200"
+echo "  auth-service role: ${APP_NAMESPACE} / ${APP_RELEASE_NAME}-auth-service"
 
 

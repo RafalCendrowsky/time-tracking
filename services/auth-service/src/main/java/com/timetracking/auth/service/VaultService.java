@@ -1,6 +1,6 @@
 package com.timetracking.auth.service;
 
-import com.timetracking.auth.config.properties.VaultProperties;
+import com.timetracking.auth.config.properties.VaultKvProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -18,7 +18,7 @@ public class VaultService {
     private static final String VALUE_FIELD = "value";
 
     private final VaultTemplate vaultTemplate;
-    private final VaultProperties vaultProperties;
+    private final VaultKvProperties vaultKvProperties;
     private final ConcurrentHashMap<String, String> cache = new ConcurrentHashMap<>();
 
     public String get(String key) {
@@ -30,7 +30,7 @@ public class VaultService {
     }
 
     private Optional<String> readFromVault(String key) {
-        var response = vaultTemplate.opsForVersionedKeyValue(vaultProperties.kvMount())
+        var response = vaultTemplate.opsForVersionedKeyValue(vaultKvProperties.backend())
                 .get(fullPath(key), Map.class);
 
         return Optional.ofNullable(response)
@@ -40,6 +40,6 @@ public class VaultService {
     }
 
     private String fullPath(String key) {
-        return vaultProperties.secretPath() + "/" + key;
+        return vaultKvProperties.defaultContext() + "/" + key;
     }
 }

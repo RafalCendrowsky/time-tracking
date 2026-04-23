@@ -61,7 +61,7 @@ auth-service:
   ingress:
     enabled: false
     className: nginx
-    host: auth.time-tracking.local
+    host: auth.time-tracking
 
   resources:
     requests:
@@ -99,7 +99,7 @@ project-service:
   ingress:
     enabled: false
     className: nginx
-    host: api.time-tracking.local
+    host: api.time-tracking
 
   resources:
     requests:

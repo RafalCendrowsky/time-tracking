@@ -1,5 +1,8 @@
 ca:
   bootstrapIssuerName: time-tracking-shared-ca-bootstrap
+  bootstrapIssuerType: self-signed # self-signed | acme | external
+  bootstrapIssuerKind: ""
+  bootstrapIssuerNamespace: cert-manager
   certificateName: time-tracking-shared-ca
   secretName: time-tracking-shared-ca-tls
   commonName: time-tracking-shared-ca
@@ -7,4 +10,10 @@ ca:
 issuer:
   name: time-tracking-shared-ca-issuer
   kind: ClusterIssuer
+
+acme:
+  email: ""
+  server: https://acme-v02.api.letsencrypt.org/directory
+  privateKeySecretRefName: time-tracking-shared-ca-bootstrap-acme
+  solvers: []
 

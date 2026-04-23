@@ -11,16 +11,19 @@ spring:
     representation:
       uuid: standard
     ssl:
-      enabled: { MONGO_SSL_ENABLED:false }
+      enabled: ${MONGO_SSL_ENABLED:false}
 
   cloud:
     vault:
-      uri: ${VAULT_URI}
+      uri: ${VAULT_URI:http://localhost:8200}
       scheme: https
       authentication: KUBERNETES
       kubernetes:
         role: ${VAULT_ROLE:auth-service}
         service-account-token-file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      kv:
+        backend: ${VAULT_KV_MOUNT:secret}
+        default-context: ${VAULT_SECRET_PATH:auth-service}
 
 oauth2:
   internal:
@@ -39,3 +42,4 @@ cors:
   exposed-headers: ""
   allow-credentials: false
   max-age-seconds: 1800
+

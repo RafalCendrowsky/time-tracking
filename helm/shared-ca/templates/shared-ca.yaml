@@ -1,11 +1,35 @@
+{{- $bootstrapMode := .Values.ca.bootstrapIssuerType | default "self-signed" -}}
+{{- $bootstrapKind := .Values.ca.bootstrapIssuerKind | default (ternary "ClusterIssuer" "Issuer" (eq $bootstrapMode "acme")) -}}
+{{- $bootstrapName := .Values.ca.bootstrapIssuerName -}}
+{{- $bootstrapNamespace := .Values.ca.bootstrapIssuerNamespace | default "cert-manager" -}}
+{{- if ne $bootstrapMode "external" }}
 apiVersion: cert-manager.io/v1
-kind: Issuer
+kind: {{ $bootstrapKind }}
 metadata:
-  name: {{ .Values.ca.bootstrapIssuerName }}
-  namespace: cert-manager
+  name: {{ $bootstrapName }}
+  {{- if eq $bootstrapKind "Issuer" }}
+  namespace: {{ $bootstrapNamespace }}
+  {{- end }}
 spec:
-  selfSigned: { }
+  {{- if eq $bootstrapMode "self-signed" }}
+  selfSigned: {}
+  {{- else if eq $bootstrapMode "acme" }}
+  acme:
+    email: {{ required "ca.acme.email is required when ca.bootstrapIssuerType is acme" .Values.acme.email | quote }}
+    server: {{ .Values.acme.server | quote }}
+    privateKeySecretRef:
+      name: {{ required "ca.acme.privateKeySecretRefName is required when ca.bootstrapIssuerType is acme" .Values.acme.privateKeySecretRefName | quote }}
+    {{- if .Values.acme.solvers }}
+    solvers:
+{{ toYaml .Values.acme.solvers | nindent 6 }}
+    {{- else }}
+    solvers: []
+    {{- end }}
+  {{- else }}
+  {{- fail (printf "unsupported ca.bootstrapIssuerType %q (expected self-signed, acme, or external)" $bootstrapMode) }}
+  {{- end }}
 ---
+{{- end }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -21,8 +45,8 @@ spec:
     algorithm: ECDSA
     size: 256
   issuerRef:
-    name: {{ .Values.ca.bootstrapIssuerName }}
-    kind: Issuer
+    name: {{ $bootstrapName }}
+    kind: {{ $bootstrapKind }}
 ---
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer

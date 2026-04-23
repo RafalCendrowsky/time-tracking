@@ -14,6 +14,7 @@ spec:
       labels:
         app: {{ .Release.Name }}-auth-service
     spec:
+      automountServiceAccountToken: true
       serviceAccountName: {{ .Release.Name }}-auth-service
       initContainers:
         - name: build-truststore
