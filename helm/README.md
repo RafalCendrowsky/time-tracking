@@ -33,11 +33,32 @@ helm/
 - [Helm 3](https://helm.sh/docs/intro/install/)
 - A running Kubernetes cluster (e.g. `kind`, `minikube`, Docker Desktop)
 
+## Local secrets override
+
+For local development, keep your private chart overrides in `helm/time-tracking/secrets.yaml`.
+Put your local ingress settings in that file so the app resolves through nip.io and the local ingress controller:
+
+```yaml
+auth-service:
+  ingress:
+    enabled: true
+    host: auth.127.0.0.1.nip.io
+
+project-service:
+  ingress:
+    enabled: true
+    host: api.127.0.0.1.nip.io
+```
+
+If you want to keep secrets out of version control, treat this file as a local-only override and do not commit real
+credentials.
+
 ## Scripts
 
 ### Fresh kind cluster bootstrap
 
-Use these when you want to create a kind cluster, install everything, and build or load local images.
+Use these when you want to create a kind cluster, install everything, and build or load local images. On cluster
+creation / restart vault needs to be unsealed (see [Initialize Vault](#initialize-vault)).
 
 ```powershell
 # PowerShell
@@ -91,7 +112,6 @@ Run this after Vault is installed so it can initialize/unseal Vault and seed the
 ```powershell
 # PowerShell
 .\scripts\init-vault.ps1
-.\scripts\init-vault.ps1 -OutputFile .\scripts\vault-init-keys.json -UnsealKeysFile .\scripts\vault-init-keys.json -ClientSecret base-client-secret -TimeoutSec 180
 ```
 
 ```bash
@@ -113,8 +133,7 @@ Install order:
 2. `ingress-nginx`
 3. `shared-ca` (creates the shared CA and `ClusterIssuer`)
 4. `vault`
-5. `init-vault`
-6. `time-tracking`
+5. `time-tracking`
 
 If you already have a cluster and only want to deploy the app chart, use `deploy-app` instead.
 
