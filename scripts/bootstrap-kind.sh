@@ -11,6 +11,7 @@ CHART_PATH="${REPO_ROOT}/helm/time-tracking"
 VALUES_FILE="${CHART_PATH}/values.yaml"
 SHARED_CA_CHART_PATH="${REPO_ROOT}/helm/shared-ca"
 SHARED_CA_VALUES_FILE="${SHARED_CA_CHART_PATH}/values.yaml"
+KIND_CONFIG_FILE="${SCRIPT_DIR}/kind-config.yaml"
 VAULT_CHART_PATH="${REPO_ROOT}/helm/vault"
 VAULT_VALUES_FILE="${VAULT_CHART_PATH}/values.yaml"
 VAULT_INIT_KEYS_FILE="${SCRIPT_DIR}/vault-init-keys.json"
@@ -133,13 +134,14 @@ require_cmd docker
 
 if ! kind get clusters | grep -qx "$CLUSTER_NAME"; then
   echo "Creating kind cluster '$CLUSTER_NAME'"
-  run_checked "kind create cluster" kind create cluster --name "$CLUSTER_NAME"
+  run_checked "kind create cluster" kind create cluster --name "$CLUSTER_NAME" --config "$KIND_CONFIG_FILE"
 else
   echo "Kind cluster '$CLUSTER_NAME' already exists"
 fi
 
 echo "Adding Helm repositories"
 run_checked "helm repo add jetstack" helm repo add jetstack https://charts.jetstack.io --force-update
+run_checked "helm repo add ingress-nginx" helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx --force-update
 run_checked "helm repo add cnpg" helm repo add cnpg https://cloudnative-pg.github.io/charts --force-update
 run_checked "helm repo add mongodb" helm repo add mongodb https://mongodb.github.io/helm-charts --force-update
 run_checked "helm repo add hashicorp" helm repo add hashicorp https://helm.releases.hashicorp.com --force-update
@@ -159,6 +161,19 @@ run_checked "kubectl rollout status cert-manager" kubectl rollout status deploym
 run_checked "kubectl rollout status cert-manager-cainjector" kubectl rollout status deployment/cert-manager-cainjector --namespace cert-manager --timeout=10m
 run_checked "kubectl rollout status cert-manager-webhook" kubectl rollout status deployment/cert-manager-webhook --namespace cert-manager --timeout=10m
 
+run_checked "helm upgrade --install ingress-nginx" helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --create-namespace \
+  --set controller.kind=DaemonSet \
+  --set-string controller.nodeSelector.ingress-ready=true \
+  --set controller.hostPort.enabled=true \
+  --set controller.hostPort.ports.http=80 \
+  --set controller.hostPort.ports.https=443 \
+  --set controller.service.type=ClusterIP \
+  --history-max 1 \
+  --wait \
+  --timeout 10m
+
 if [[ ! -d "$CHART_PATH" ]]; then
   echo "Helm chart path '$CHART_PATH' does not exist." >&2
   exit 1
@@ -173,6 +188,10 @@ if [[ ! -d "$SHARED_CA_CHART_PATH" ]]; then
 fi
 if [[ ! -f "$SHARED_CA_VALUES_FILE" ]]; then
   echo "Shared CA values file '$SHARED_CA_VALUES_FILE' does not exist." >&2
+  exit 1
+fi
+if [[ ! -f "$KIND_CONFIG_FILE" ]]; then
+  echo "Kind config file '$KIND_CONFIG_FILE' does not exist." >&2
   exit 1
 fi
 if [[ ! -d "$VAULT_CHART_PATH" ]]; then

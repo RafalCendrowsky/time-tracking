@@ -1,5 +1,7 @@
 {{- $ns  := .Release.Namespace }}
 {{- $rel := .Release.Name }}
+{{- $auth := index .Values "auth-service" -}}
+{{- $project := index .Values "project-service" -}}
 {{- $issuerName := required "tls.external.name is required for external issuer" .Values.tls.external.name }}
 {{- $issuerKind := .Values.tls.external.kind | default "ClusterIssuer" }}
 apiVersion: cert-manager.io/v1
@@ -29,8 +31,9 @@ spec:
   secretName: {{ $rel }}-auth-service-tls
   duration: 8760h
   renewBefore: 720h
-  commonName: {{ $rel }}-auth-service
+  commonName: {{ $auth.ingress.host }}
   dnsNames:
+    - {{ $auth.ingress.host }}
     - {{ $rel }}-auth-service
     - {{ $rel }}-auth-service.{{ $ns }}.svc.cluster.local
   issuerRef:
@@ -46,8 +49,9 @@ spec:
   secretName: {{ $rel }}-project-service-tls
   duration: 8760h
   renewBefore: 720h
-  commonName: {{ $rel }}-project-service
+  commonName: {{ $project.ingress.host }}
   dnsNames:
+    - {{ $project.ingress.host }}
     - {{ $rel }}-project-service
     - {{ $rel }}-project-service.{{ $ns }}.svc.cluster.local
   issuerRef:

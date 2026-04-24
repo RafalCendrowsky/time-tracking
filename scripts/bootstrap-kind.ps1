@@ -114,6 +114,7 @@ if ( [string]::IsNullOrWhiteSpace($ValuesFile))
 }
 $SharedCAChartPath = Join-Path $repoRoot 'helm\shared-ca'
 $SharedCAValuesFile = Join-Path $SharedCAChartPath 'values.yaml'
+$KindConfigFile = Join-Path $PSScriptRoot 'kind-config.yaml'
 $VaultChartPath = Join-Path $repoRoot 'helm\vault'
 $VaultValuesFile = Join-Path $VaultChartPath 'values.yaml'
 $VaultInitKeysFile = Join-Path $PSScriptRoot 'vault-init-keys.json'
@@ -128,7 +129,7 @@ if (-not ($clusterList -contains $ClusterName))
 {
     Write-Host "Creating kind cluster '$ClusterName'"
     Invoke-Checked -Description "kind create cluster" -ScriptBlock {
-        & kind create cluster --name $ClusterName
+        & kind create cluster --name $ClusterName --config $KindConfigFile
     }
 }
 else
@@ -138,6 +139,7 @@ else
 
 Write-Host 'Adding Helm repositories'
 Invoke-Checked -Description 'helm repo add jetstack' -ScriptBlock { & helm repo add jetstack https://charts.jetstack.io --force-update }
+Invoke-Checked -Description 'helm repo add ingress-nginx' -ScriptBlock { & helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx --force-update }
 Invoke-Checked -Description 'helm repo add cnpg' -ScriptBlock { & helm repo add cnpg https://cloudnative-pg.github.io/charts --force-update }
 Invoke-Checked -Description 'helm repo add mongodb' -ScriptBlock { & helm repo add mongodb https://mongodb.github.io/helm-charts --force-update }
 Invoke-Checked -Description 'helm repo add hashicorp' -ScriptBlock { & helm repo add hashicorp https://helm.releases.hashicorp.com --force-update }
@@ -165,6 +167,21 @@ Invoke-Checked -Description 'kubectl rollout status cert-manager-webhook' -Scrip
     & kubectl rollout status deployment/cert-manager-webhook --namespace cert-manager --timeout=10m
 }
 
+Write-Host 'Installing ingress-nginx controller'
+Invoke-Checked -Description 'helm upgrade --install ingress-nginx' -ScriptBlock {
+    & helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx `
+        --namespace ingress-nginx `
+        --create-namespace `
+        --set controller.kind=DaemonSet `
+        --set-string controller.nodeSelector.ingress-ready=true `
+        --set controller.hostPort.enabled=true `
+        --set controller.hostPort.ports.http=80 `
+        --set controller.hostPort.ports.https=443 `
+        --set controller.service.type=ClusterIP `
+        --wait `
+        --timeout 10m
+}
+
 if (-not (Test-Path $ChartPath))
 {
     throw "Helm chart path '$ChartPath' does not exist."
@@ -180,6 +197,10 @@ if (-not (Test-Path $SharedCAChartPath))
 if (-not (Test-Path $SharedCAValuesFile))
 {
     throw "Shared CA values file '$SharedCAValuesFile' does not exist."
+}
+if (-not (Test-Path $KindConfigFile))
+{
+    throw "Kind config file '$KindConfigFile' does not exist."
 }
 if (-not (Test-Path $VaultChartPath))
 {

@@ -60,6 +60,8 @@ Defaults:
 - chart: `helm/time-tracking`
 - values file: `helm/time-tracking/values.yaml`
 
+Kind bootstrap expects host ports `80` and `443` to be free so ingress-nginx can be reached from the browser.
+
 ### Deploy the application into an existing cluster
 
 Use these when `cert-manager`, `shared-ca`, and `vault` are already installed and you only want to deploy or refresh the
@@ -114,7 +116,7 @@ Install order:
 5. `init-vault`
 6. `time-tracking`
 
-If you already have a cluster and only want to deploy the app chart, use `deploy-app` instead of the last two steps.
+If you already have a cluster and only want to deploy the app chart, use `deploy-app` instead.
 
 ## Service DNS names inside the cluster
 

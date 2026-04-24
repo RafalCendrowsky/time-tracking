@@ -5,8 +5,15 @@ metadata:
   name: {{ .Release.Name }}-auth-service
   labels:
     app: {{ .Release.Name }}-auth-service
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/proxy-ssl-verify: "off"
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+      secretName: {{ .Release.Name }}-auth-service-tls
   rules:
     - host: {{ .Values.ingress.host }}
       http:
