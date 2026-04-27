@@ -1,11 +1,11 @@
 package com.timetracking.project.service;
 
+import com.timetracking.project.config.principal.UserPrincipal;
 import com.timetracking.project.exception.NotFoundException;
 import com.timetracking.project.exception.ValidationException;
 import com.timetracking.project.mapper.ProjectTreeMapper;
 import com.timetracking.project.model.domain.Project;
 import com.timetracking.project.model.repository.ProjectRepository;
-import com.timetracking.project.security.UserPrincipal;
 import com.timetracking.project.web.dto.CreateProjectRequest;
 import com.timetracking.project.web.dto.ProjectResponse;
 import com.timetracking.project.web.dto.ProjectTreeResponse;
@@ -45,7 +45,7 @@ public class ProjectService {
     public ProjectResponse create(CreateProjectRequest request, UUID userId) {
         var parent = projectRepository.findById(request.parentId())
                 .orElseThrow(() -> new NotFoundException("Parent project not found: " + request.parentId()));
-        
+
         if (parent.getOrganizationId() == null && parent.getParentId() != null) {
             throw new ValidationException("Personal projects can only be 1 level deep");
         }

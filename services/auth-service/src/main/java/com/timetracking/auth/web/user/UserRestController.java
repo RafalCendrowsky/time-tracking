@@ -1,14 +1,15 @@
 package com.timetracking.auth.web.user;
 
+import com.timetracking.auth.config.principal.UserPrincipal;
 import com.timetracking.auth.service.UserService;
 import com.timetracking.auth.web.user.dto.UpdateProfileRequest;
 import com.timetracking.auth.web.user.dto.UpdateRolesRequest;
 import com.timetracking.auth.web.user.dto.UserResponse;
+import com.timetracking.auth.web.user.dto.UserShortResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,12 +23,28 @@ public class UserRestController {
     private final UserService userService;
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public List<UserResponse> searchUsers(@RequestParam(required = false) String query) {
-        return userService.searchUsers(query)
+    public List<UserShortResponse> searchUsers(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(required = false) String query
+    ) {
+        return userService.searchUsers(query, principal)
                 .stream()
-                .map(UserResponse::from)
+                .map(UserShortResponse::from)
                 .toList();
+    }
+
+    @GetMapping("/{id}")
+    public UserShortResponse getById(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @PathVariable UUID id
+    ) {
+        return UserShortResponse.from(userService.findById(id, principal));
+    }
+
+    @GetMapping("/{id}/details")
+    @PreAuthorize("hasRole('ADMIN')")
+    public UserResponse getUserDetails(@PathVariable UUID id) {
+        return UserResponse.from(userService.findById(id));
     }
 
     @PutMapping("/{id}/roles")
@@ -38,12 +55,13 @@ public class UserRestController {
 
     @PutMapping("/me/profile")
     public UserResponse updateProfile(
-            @AuthenticationPrincipal UserDetails principal,
+            @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody UpdateProfileRequest request
     ) {
-        var userId = UUID.fromString(principal.getUsername());
-        return UserResponse.from(
-                userService.updateProfile(userId, request.firstName(), request.lastName()));
+        return UserResponse.from(userService.updateProfile(
+                principal.userId(),
+                request.firstName(),
+                request.lastName()
+        ));
     }
 }
-

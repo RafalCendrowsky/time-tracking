@@ -23,8 +23,9 @@ public class ProjectMember {
     @Column(name = "project_id", nullable = false)
     private UUID projectId;
 
-    @Column(name = "user_id", nullable = false)
-    private UUID userId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id", nullable = false)
+    private UserProjection user;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -37,4 +38,3 @@ public class ProjectMember {
     @Column(name = "granted_at", nullable = false, updatable = false)
     private OffsetDateTime grantedAt;
 }
-

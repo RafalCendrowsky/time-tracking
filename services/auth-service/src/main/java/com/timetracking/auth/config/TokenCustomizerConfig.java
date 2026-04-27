@@ -1,7 +1,7 @@
 package com.timetracking.auth.config;
 
-import com.timetracking.auth.dto.ExternalUserPrincipal;
-import com.timetracking.auth.dto.InternalUserPrincipal;
+import com.timetracking.auth.config.principal.ExternalUserPrincipal;
+import com.timetracking.auth.config.principal.InternalUserPrincipal;
 import com.timetracking.auth.model.domain.UserAccount;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

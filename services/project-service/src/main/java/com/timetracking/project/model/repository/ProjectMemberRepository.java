@@ -1,6 +1,7 @@
 package com.timetracking.project.model.repository;
 
 import com.timetracking.project.model.domain.ProjectMember;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,13 +12,15 @@ import java.util.UUID;
 
 public interface ProjectMemberRepository extends JpaRepository<ProjectMember, UUID> {
 
-    Optional<ProjectMember> findByProjectIdAndUserId(UUID projectId, UUID userId);
+    @EntityGraph(attributePaths = "user")
+    Optional<ProjectMember> findByProjectIdAndUserUserId(UUID projectId, UUID userId);
 
+    @EntityGraph(attributePaths = "user")
     List<ProjectMember> findByProjectId(UUID projectId);
 
-    void deleteByProjectIdAndUserId(UUID projectId, UUID userId);
+    void deleteByProjectIdAndUserUserId(UUID projectId, UUID userId);
 
-    boolean existsByProjectIdAndUserId(UUID projectId, UUID userId);
+    boolean existsByProjectIdAndUserUserId(UUID projectId, UUID userId);
 
     int countByProjectId(UUID projectId);
 

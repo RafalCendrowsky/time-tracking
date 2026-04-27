@@ -1,13 +1,19 @@
 package com.timetracking.auth.service;
 
+import com.timetracking.auth.config.principal.InternalUserPrincipal;
+import com.timetracking.auth.config.principal.UserPrincipal;
 import com.timetracking.auth.constant.UserRole;
-import com.timetracking.auth.dto.InternalUserPrincipal;
 import com.timetracking.auth.exception.DuplicateEmailException;
 import com.timetracking.auth.model.domain.UserAccount;
 import com.timetracking.auth.model.repository.UserAccountRepository;
+import com.timetracking.auth.web.user.dto.RegisterUserResponse;
+import com.timetracking.auth.web.user.dto.UserResponse;
+import com.timetracking.auth.web.user.dto.UserShortResponse;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -15,11 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 import static com.timetracking.auth.util.NormalizationUtil.normalizeEmail;
 
@@ -27,9 +29,17 @@ import static com.timetracking.auth.util.NormalizationUtil.normalizeEmail;
 @RequiredArgsConstructor
 public class UserService implements UserDetailsService {
     private static final UserRole DEFAULT_ROLE = UserRole.USER;
+    private static final int SEARCH_LIMIT = 20;
 
     private final UserAccountRepository userAccountRepository;
     private final PasswordEncoder passwordEncoder;
+
+    public List<UserAccount> searchUsers(String query, UserPrincipal principal) {
+        Pageable page = PageRequest.of(0, SEARCH_LIMIT);
+        return principal.isAdmin() ?
+               userAccountRepository.searchByEmailOrName(query, page) :
+               userAccountRepository.searchByEmailOrName(query, principal.organizationId(), page);
+    }
 
     public Optional<UserAccount> findByEmail(String email) {
         return userAccountRepository.findByEmail(normalizeEmail(email));
@@ -37,14 +47,16 @@ public class UserService implements UserDetailsService {
 
     public UserAccount findById(UUID id) {
         return userAccountRepository.findById(id)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + id));
+                .orElseThrow(() -> new UsernameNotFoundException("User %s not found".formatted(id)));
     }
 
-    public List<UserAccount> searchUsers(String query) {
-        if (query == null || query.isBlank()) {
-            return userAccountRepository.findAll();
+    public UserAccount findById(UUID id, UserPrincipal principal) {
+        if (principal.isAdmin()) {
+            return findById(id);
         }
-        return userAccountRepository.searchByEmailOrName(query.trim());
+        var orgId = principal.organizationId();
+        return userAccountRepository.findByIdAndOrganizationId(id, orgId)
+                .orElseThrow(() -> new UsernameNotFoundException("User %s not found in %s".formatted(id, orgId)));
     }
 
 

@@ -5,6 +5,7 @@ import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import com.timetracking.auth.config.principal.UserPrincipalJwtConverter;
 import com.timetracking.auth.config.properties.CorsProperties;
 import com.timetracking.auth.config.properties.OAuthProperties;
 import com.timetracking.auth.service.CustomOidcUserService;
@@ -53,10 +54,11 @@ public class SecurityConfig {
 
     private final CustomOidcUserService oidcUserService;
     private final CorsProperties corsProperties;
+    private final UserPrincipalJwtConverter userPrincipalJwtConverter;
 
     @Bean
     @Order(1)
-    SecurityFilterChain authServerFilterChain(HttpSecurity http) {
+    SecurityFilterChain authServerFilterChain(HttpSecurity http) throws Exception {
         var authServerConfigurer = new OAuth2AuthorizationServerConfigurer();
         http
                 .securityMatcher(authServerConfigurer.getEndpointsMatcher())
@@ -73,7 +75,7 @@ public class SecurityConfig {
 
     @Bean
     @Order(2)
-    SecurityFilterChain defaultFilterChain(HttpSecurity http) {
+    SecurityFilterChain defaultFilterChain(HttpSecurity http) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> authorize
@@ -91,6 +93,9 @@ public class SecurityConfig {
                         .userInfoEndpoint(userInfo -> userInfo
                                 .oidcUserService(oidcUserService)
                         )
+                )
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(userPrincipalJwtConverter))
                 );
         return http.build();
     }

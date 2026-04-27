@@ -11,6 +11,7 @@ config:
   vaultUri: ""
   vaultKvMount: secret
   vaultSecretPath: project-service
+  authServiceBaseUrl: ""
   authServerIssuer: ""
   authServerJwkSetUri: ""
   corsAllowedOrigins: ""

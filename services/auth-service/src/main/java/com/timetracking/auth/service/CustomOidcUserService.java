@@ -1,6 +1,6 @@
 package com.timetracking.auth.service;
 
-import com.timetracking.auth.dto.ExternalUserPrincipal;
+import com.timetracking.auth.config.principal.ExternalUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserRequest;
 import org.springframework.security.oauth2.client.oidc.userinfo.OidcUserService;

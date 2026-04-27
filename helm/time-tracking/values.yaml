@@ -84,6 +84,7 @@ project-service:
     vaultUri: https://time-tracking-vault.vault.svc.cluster.local:8200
     vaultKvMount: secret
     vaultSecretPath: project-service
+    authServiceBaseUrl: https://time-tracking-auth-service
     authServerIssuer: https://time-tracking-auth-service
     authServerJwkSetUri: https://time-tracking-auth-service/oauth2/jwks
     corsAllowedOrigins: http://localhost:3000

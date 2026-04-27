@@ -1,6 +1,6 @@
 package com.timetracking.project.web;
 
-import com.timetracking.project.security.UserPrincipal;
+import com.timetracking.project.config.principal.UserPrincipal;
 import com.timetracking.project.service.ProjectMemberService;
 import com.timetracking.project.web.dto.AssignRoleRequest;
 import com.timetracking.project.web.dto.ProjectMemberResponse;

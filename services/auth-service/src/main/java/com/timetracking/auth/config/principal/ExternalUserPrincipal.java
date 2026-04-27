@@ -1,5 +1,6 @@
-package com.timetracking.auth.dto;
+package com.timetracking.auth.config.principal;
 
+import com.timetracking.auth.constant.UserRole;
 import com.timetracking.auth.model.domain.UserAccount;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.GrantedAuthority;
@@ -9,8 +10,10 @@ import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
-public record ExternalUserPrincipal(UserAccount user, OidcUser delegate) implements OidcUser {
+public record ExternalUserPrincipal(UserAccount user, OidcUser delegate) implements OidcUser, UserPrincipal {
     @Override
     public Map<String, Object> getClaims() {
         return delegate.getClaims();
@@ -41,5 +44,20 @@ public record ExternalUserPrincipal(UserAccount user, OidcUser delegate) impleme
     @Override
     public @NonNull String getName() {
         return user.getId().toString();
+    }
+
+    @Override
+    public UUID userId() {
+        return user.getId();
+    }
+
+    @Override
+    public UUID organizationId() {
+        return user.getOrganizationId();
+    }
+
+    @Override
+    public Set<UserRole> roles() {
+        return user.getRoles();
     }
 }

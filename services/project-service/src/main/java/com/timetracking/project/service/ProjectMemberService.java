@@ -1,5 +1,6 @@
 package com.timetracking.project.service;
 
+import com.timetracking.project.config.principal.UserPrincipal;
 import com.timetracking.project.exception.NotFoundException;
 import com.timetracking.project.exception.ValidationException;
 import com.timetracking.project.model.domain.Project;
@@ -7,7 +8,6 @@ import com.timetracking.project.model.domain.ProjectMember;
 import com.timetracking.project.model.domain.ProjectRole;
 import com.timetracking.project.model.repository.ProjectMemberRepository;
 import com.timetracking.project.model.repository.ProjectRepository;
-import com.timetracking.project.security.UserPrincipal;
 import com.timetracking.project.web.dto.AssignRoleRequest;
 import com.timetracking.project.web.dto.ProjectMemberResponse;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +27,7 @@ public class ProjectMemberService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectRepository projectRepository;
     private final PermissionService permissionEvaluator;
+    private final UserProjectionService userProjectionService;
 
     @Transactional(readOnly = true)
     public List<ProjectMemberResponse> listMembers(UUID projectId) {
@@ -41,7 +42,13 @@ public class ProjectMemberService {
         var project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new NotFoundException("Project not found: " + projectId));
         var callerRole = permissionEvaluator.resolveEffectiveRole(projectId, caller);
-        var existingMember = projectMemberRepository.findByProjectIdAndUserId(projectId, request.userId());
+        var existingMember = projectMemberRepository.findByProjectIdAndUserUserId(projectId, request.userId());
+        var userProjection = existingMember.map(ProjectMember::getUser)
+                .orElseGet(() -> userProjectionService.getUser(request.userId()));
+
+        if (userProjection.getOrganizationId() != project.getOrganizationId()) {
+            throw new AccessDeniedException("You are not allowed to perform this action");
+        }
 
         if (project.getOrganizationId() == null && existingMember.isEmpty()) {
             validatePersonalProjectSize(project);
@@ -49,7 +56,7 @@ public class ProjectMemberService {
 
         var member = existingMember.orElseGet(() -> ProjectMember.builder()
                 .projectId(projectId)
-                .userId(request.userId())
+                .user(userProjection)
                 .build());
         validateCallerCanAssign(callerRole, member, request.role());
 
@@ -62,7 +69,7 @@ public class ProjectMemberService {
     @Transactional
     public void removeRole(UUID projectId, UUID targetUserId, UserPrincipal caller) {
         verifyProjectExists(projectId);
-        var target = projectMemberRepository.findByProjectIdAndUserId(projectId, targetUserId)
+        var target = projectMemberRepository.findByProjectIdAndUserUserId(projectId, targetUserId)
                 .orElseThrow(() -> new NotFoundException("Member not found for project %s and user %s".formatted(
                         projectId,
                         targetUserId
@@ -71,7 +78,7 @@ public class ProjectMemberService {
         var callerRole = permissionEvaluator.resolveEffectiveRole(projectId, caller);
         validateCallerCanAssign(callerRole, target, null);
 
-        projectMemberRepository.deleteByProjectIdAndUserId(projectId, targetUserId);
+        projectMemberRepository.deleteByProjectIdAndUserUserId(projectId, targetUserId);
     }
 
     private void validatePersonalProjectSize(Project project) {

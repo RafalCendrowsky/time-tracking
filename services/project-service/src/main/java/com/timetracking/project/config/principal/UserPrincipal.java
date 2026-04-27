@@ -1,4 +1,4 @@
-package com.timetracking.project.security;
+package com.timetracking.project.config.principal;
 
 import java.util.List;
 import java.util.UUID;

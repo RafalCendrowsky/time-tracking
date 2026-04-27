@@ -9,6 +9,7 @@ data:
   VAULT_URI: {{ .Values.config.vaultUri | quote }}
   VAULT_KV_MOUNT: {{ .Values.config.vaultKvMount | quote }}
   VAULT_SECRET_PATH: {{ .Values.config.vaultSecretPath | quote }}
+  AUTH_SERVICE_BASE_URL: {{ .Values.config.authServiceBaseUrl | quote }}
   AUTH_SERVER_ISSUER: {{ .Values.config.authServerIssuer | quote }}
   AUTH_SERVER_JWK_SET_URI: {{ .Values.config.authServerJwkSetUri | quote }}
   CORS_ALLOWED_ORIGINS: {{ .Values.config.corsAllowedOrigins | quote }}

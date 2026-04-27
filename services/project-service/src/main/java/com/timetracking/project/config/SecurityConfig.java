@@ -1,7 +1,7 @@
 package com.timetracking.project.config;
 
+import com.timetracking.project.config.principal.UserPrincipalJwtConverter;
 import com.timetracking.project.config.properties.CorsProperties;
-import com.timetracking.project.security.UserPrincipalJwtConverter;
 import com.timetracking.project.service.PermissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;

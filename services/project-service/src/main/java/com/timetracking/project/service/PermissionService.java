@@ -1,10 +1,10 @@
 package com.timetracking.project.service;
 
+import com.timetracking.project.config.principal.UserPrincipal;
+import com.timetracking.project.config.principal.UserPrincipalAuthenticationToken;
 import com.timetracking.project.model.domain.ProjectRole;
 import com.timetracking.project.model.repository.ProjectMemberRepository;
 import com.timetracking.project.model.repository.ProjectRepository;
-import com.timetracking.project.security.UserPrincipal;
-import com.timetracking.project.security.UserPrincipalAuthenticationToken;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.access.PermissionEvaluator;
