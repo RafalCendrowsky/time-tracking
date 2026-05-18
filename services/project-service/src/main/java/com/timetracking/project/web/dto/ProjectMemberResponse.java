@@ -18,7 +18,7 @@ public record ProjectMemberResponse(
         return new ProjectMemberResponse(
                 member.getId(),
                 member.getProjectId(),
-                member.getUserId(),
+                member.getUser().getUserId(),
                 member.getRole(),
                 member.getGrantedBy(),
                 member.getGrantedAt()
