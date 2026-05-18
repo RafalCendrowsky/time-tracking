@@ -5,7 +5,7 @@ set -euo pipefail
 # - Does NOT install operators, cert-manager, the shared CA chart, or Vault
 # - Expects the shared CA and Vault to already be installed (Vault in the dedicated `vault` namespace)
 # - By default builds & loads local images for the two services; pass --skip-images to skip that
-# - Use --rebuild-images to force rebuild
+# - Use --build-images to force rebuild
 
 CLUSTER_NAME="time-tracking-kind"
 NAMESPACE="time-tracking"
@@ -14,14 +14,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CHART_PATH="${REPO_ROOT}/helm/time-tracking"
 VALUES_FILE="${CHART_PATH}/values.yaml"
 REGISTRY=""
-REBUILD_IMAGES=false
+BUILD_IMAGES=false
 SKIP_IMAGES=false
 
 usage(){ cat <<'EOF'
-Usage: deploy-app.sh [--rebuild-images] [--skip-images] [--cluster CLUSTER] [--namespace NAMESPACE]
+Usage: deploy-app.sh [--build-images] [--skip-images] [--cluster CLUSTER] [--namespace NAMESPACE]
 
 Options:
-  --rebuild-images    Force rebuild auth/project images before loading into kind
+  --build-images      Force rebuild auth/project images before loading into kind
   --skip-images       Do not build or load images (assume images already in cluster/registry)
   --cluster NAME      Kind cluster name
   --namespace NAME    Kubernetes namespace
@@ -31,7 +31,7 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --rebuild-images) REBUILD_IMAGES=true; shift ;;
+    --build-images) BUILD_IMAGES=true; shift ;;
     --skip-images) SKIP_IMAGES=true; shift ;;
     --cluster) CLUSTER_NAME="$2"; shift 2 ;;
     --namespace) NAMESPACE="$2"; shift 2 ;;
@@ -45,10 +45,10 @@ require_cmd kind; require_cmd kubectl; require_cmd helm; require_cmd docker
 
 image_name(){ local repository="$1"; if [[ -z "$REGISTRY" ]]; then printf '%s' "$repository"; else printf '%s/%s' "$REGISTRY" "$repository"; fi }
 
-image_exists(){ docker image inspect "$1" >/dev/null 2>&1 || return 1 }
+image_exists(){ docker image inspect "$1" >/dev/null 2>&1 || return 1; }
 
 ensure_image(){ local image="$1"; local context_path="$2";
-  if [[ "$REBUILD_IMAGES" == "true" ]] || ! image_exists "$image"; then
+  if [[ "$BUILD_IMAGES" == "true" ]] || ! image_exists "$image"; then
     echo "Building $image from $context_path"
     docker build -t "$image" "$context_path"
   else

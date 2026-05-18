@@ -27,7 +27,7 @@ KEY_SHARES=5
 KEY_THRESHOLD=3
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_FILE="${SCRIPT_DIR}/vault-init-keys.json"
-CLIENT_SECRET=""
+CLIENT_SECRET="base-client-secret"
 UNSEAL_KEYS_FILE=""
 TIMEOUT_SEC=180
 
